@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { ROUTES } from "@/config/app";
 import { getCurrentUser } from "@/repositories/auth.repository";
 import * as authService from "@/services/auth/auth.service";
+import * as businessService from "@/services/business/business.service";
 
 export type AuthFormState = {
   error?: string;
@@ -24,6 +25,7 @@ export async function loginAction(
     return { error: result.error };
   }
 
+  await businessService.ensureWorkspaceForUser();
   redirect(ROUTES.panel);
 }
 
@@ -31,20 +33,27 @@ export async function registerAction(
   _prevState: AuthFormState,
   formData: FormData,
 ): Promise<AuthFormState> {
+  const name = String(formData.get("name") ?? "");
+  const email = String(formData.get("email") ?? "");
+  const password = String(formData.get("password") ?? "");
+
   const result = await authService.register({
-    name: String(formData.get("name") ?? ""),
-    email: String(formData.get("email") ?? ""),
-    password: String(formData.get("password") ?? ""),
+    name,
+    email,
+    password,
   });
 
   if (!result.ok) {
     return { error: result.error };
   }
 
-  // Si la sesión ya queda activa (confirmación desactivada), ir al panel.
   const { data } = await getCurrentUser();
 
   if (data.user) {
+    await businessService.ensureWorkspaceForUser({
+      preferredName: name,
+      supportEmail: email,
+    });
     redirect(ROUTES.panel);
   }
 
