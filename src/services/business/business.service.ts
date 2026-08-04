@@ -61,8 +61,7 @@ export async function ensureWorkspaceForUser(input?: {
   if (membershipError) {
     return {
       ok: false,
-      error:
-        "No se pudo consultar tu empresa. ¿Ejecutaste la migración SQL en Supabase?",
+      error: `No se pudo consultar tu empresa: ${membershipError.message}`,
     };
   }
 
