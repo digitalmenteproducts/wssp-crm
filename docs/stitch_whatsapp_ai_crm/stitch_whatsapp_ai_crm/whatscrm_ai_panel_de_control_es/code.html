@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+
+<html class="light" lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Panel de Control - WhatsCRM AI</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700&amp;family=Inter:wght@400;600&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Config -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary-fixed-variant": "#38485d",
+                    "primary-fixed-dim": "#b7c4ff",
+                    "secondary-fixed": "#dae2fd",
+                    "error-container": "#ffdad6",
+                    "inverse-primary": "#b7c4ff",
+                    "on-tertiary-fixed": "#0b1c30",
+                    "on-secondary": "#ffffff",
+                    "inverse-surface": "#2d3133",
+                    "tertiary-container": "#57677e",
+                    "surface-tint": "#004ced",
+                    "tertiary-fixed-dim": "#b7c8e1",
+                    "on-primary-container": "#dfe3ff",
+                    "on-primary-fixed-variant": "#0038b6",
+                    "on-error": "#ffffff",
+                    "tertiary-fixed": "#d3e4fe",
+                    "outline": "#737688",
+                    "on-error-container": "#93000a",
+                    "outline-variant": "#c3c5d9",
+                    "on-background": "#191c1e",
+                    "on-secondary-fixed": "#131b2e",
+                    "surface-container-low": "#f2f4f6",
+                    "on-secondary-container": "#5c647a",
+                    "error": "#ba1a1a",
+                    "on-surface-variant": "#434656",
+                    "on-primary": "#ffffff",
+                    "tertiary": "#3f4f65",
+                    "on-secondary-fixed-variant": "#3f465c",
+                    "surface-bright": "#f7f9fb",
+                    "primary-fixed": "#dde1ff",
+                    "primary-container": "#0052ff",
+                    "on-primary-fixed": "#001452",
+                    "surface-container-highest": "#e0e3e5",
+                    "secondary": "#565e74",
+                    "surface-container-high": "#e6e8ea",
+                    "surface": "#f7f9fb",
+                    "secondary-fixed-dim": "#bec6e0",
+                    "primary": "#003ec7",
+                    "secondary-container": "#dae2fd",
+                    "background": "#f7f9fb",
+                    "surface-variant": "#e0e3e5",
+                    "surface-container": "#eceef0",
+                    "on-tertiary-container": "#d6e6ff",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-surface": "#191c1e",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "surface-dim": "#d8dadc"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "unit-md": "16px",
+                    "gutter": "24px",
+                    "unit-xs": "4px",
+                    "unit-xl": "48px",
+                    "unit-lg": "24px",
+                    "unit-sm": "8px",
+                    "container-max": "1440px",
+                    "margin-page": "32px",
+                    "sidebar-width": "260px"
+            },
+            "fontFamily": {
+                    "display-lg": [
+                            "Hanken Grotesk"
+                    ],
+                    "title-lg": [
+                            "Inter"
+                    ],
+                    "headline-md": [
+                            "Hanken Grotesk"
+                    ],
+                    "body-lg": [
+                            "Inter"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ],
+                    "headline-lg": [
+                            "Hanken Grotesk"
+                    ],
+                    "label-md": [
+                            "JetBrains Mono"
+                    ],
+                    "headline-lg-mobile": [
+                            "Hanken Grotesk"
+                    ]
+            },
+            "fontSize": {
+                    "display-lg": [
+                            "48px",
+                            {
+                                    "lineHeight": "56px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "title-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-lg": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "label-md": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.02em",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "28px",
+                            {
+                                    "lineHeight": "36px",
+                                    "fontWeight": "600"
+                            }
+                    ]
+            }
+    },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+          font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.filled {
+          font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background font-body-md text-body-md antialiased min-h-screen flex">
+<!-- SideNavBar -->
+<nav class="fixed left-0 top-0 h-full w-[260px] bg-on-secondary-fixed text-primary-fixed-dim font-body-md text-body-md border-r border-outline-variant/10 flex flex-col py-unit-lg px-unit-md z-50">
+<!-- Brand -->
+<div class="mb-unit-xl px-unit-sm flex items-center gap-3">
+<div class="w-8 h-8 rounded-lg bg-primary-fixed-dim flex items-center justify-center text-on-secondary-fixed">
+<span class="material-symbols-outlined text-[20px] font-bold">bolt</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-white tracking-tight">WhatsCRM AI</h1>
+<p class="text-xs text-on-secondary-fixed-variant mt-0.5">CRM Inteligente</p>
+</div>
+</div>
+<!-- CTA -->
+<button class="mb-unit-lg w-full bg-primary-container text-on-primary-container hover:bg-primary-container/90 py-2.5 px-4 rounded-lg font-title-lg text-[14px] flex items-center justify-center gap-2 transition-colors border-t border-white/10">
+<span class="material-symbols-outlined text-[18px]">add</span>
+            Nueva Campaña
+        </button>
+<!-- Main Navigation -->
+<div class="flex-1 overflow-y-auto space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-md bg-white/10 text-white border-l-2 border-primary-fixed-dim active:scale-98 transition-all" href="#">
+<span class="material-symbols-outlined text-[20px]">dashboard</span>
+<span>Panel de Control</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-secondary-fixed-variant hover:text-white hover:bg-white/5 transition-colors active:scale-98" href="#">
+<span class="material-symbols-outlined text-[20px]">cloud_download</span>
+<span>Contactos</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-secondary-fixed-variant hover:text-white hover:bg-white/5 transition-colors active:scale-98" href="#">
+<span class="material-symbols-outlined text-[20px]">groups</span>
+<span>Segmentos</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-secondary-fixed-variant hover:text-white hover:bg-white/5 transition-colors active:scale-98" href="#">
+<span class="material-symbols-outlined text-[20px]">description</span>
+<span>Plantillas</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-secondary-fixed-variant hover:text-white hover:bg-white/5 transition-colors active:scale-98" href="#">
+<span class="material-symbols-outlined text-[20px]">settings</span>
+<span>Configuración</span>
+</a>
+</div>
+<!-- Footer Navigation -->
+<div class="mt-auto pt-unit-md border-t border-outline-variant/10 space-y-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-secondary-fixed-variant hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">help_outline</span>
+<span>Ayuda</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-md text-on-secondary-fixed-variant hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined text-[20px]">corporate_fare</span>
+<span>Organización</span>
+</a>
+</div>
+</nav>
+<!-- Main Content Wrapper -->
+<div class="flex-1 ml-[260px] flex flex-col min-h-screen">
+<!-- TopAppBar -->
+<header class="fixed top-0 right-0 w-[calc(100%-260px)] h-16 bg-surface border-b border-surface-container-highest flex justify-between items-center px-gutter z-40">
+<div class="flex items-center gap-unit-md flex-1">
+<div class="relative w-64">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-secondary text-[20px]">search</span>
+<input class="w-full bg-white border border-outline-variant rounded-md pl-10 pr-4 py-1.5 text-[13px] focus:ring-2 focus:ring-primary-container focus:border-primary-container outline-none transition-all" placeholder="Buscar en WhatsCRM AI..." type="text"/>
+</div>
+</div>
+<nav class="hidden md:flex items-center gap-unit-lg mx-unit-lg">
+<a class="font-title-lg text-[14px] text-secondary hover:text-primary transition-all" href="#">Analítica</a>
+<a class="font-title-lg text-[14px] text-secondary hover:text-primary transition-all" href="#">Equipo</a>
+<a class="font-title-lg text-[14px] text-secondary hover:text-primary transition-all" href="#">Registros</a>
+</nav>
+<div class="flex items-center gap-unit-sm ml-auto">
+<button class="text-[13px] font-medium bg-white border border-outline-variant hover:bg-surface-container-low text-on-surface px-3 py-1.5 rounded-md transition-colors border-t-white/50">
+                    Invitar Usuario
+                </button>
+<div class="h-6 w-px bg-surface-container-highest mx-2"></div>
+<button class="p-1.5 text-secondary hover:text-primary rounded-full hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[20px]">notifications</span>
+</button>
+<button class="p-1.5 text-secondary hover:text-primary rounded-full hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[20px] filled">account_circle</span>
+</button>
+</div>
+</header>
+<!-- Canvas -->
+<main class="flex-1 mt-16 p-margin-page overflow-y-auto">
+<div class="max-w-container-max mx-auto">
+<!-- Header -->
+<div class="flex justify-between items-end mb-unit-lg">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface">Resumen del Panel de Control</h2>
+<p class="text-secondary mt-1">Esto es lo que sucede con tus contactos hoy.</p>
+</div>
+<div class="flex gap-2">
+<button class="flex items-center gap-2 px-3 py-1.5 bg-white border border-outline-variant rounded-md text-[13px] font-medium text-on-surface hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[16px]">calendar_today</span>
+                            Últimos 30 días
+                            <span class="material-symbols-outlined text-[16px]">arrow_drop_down</span>
+</button>
+</div>
+</div>
+<!-- Bento Grid Analytics -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-gutter mb-gutter">
+<!-- KPI 1 -->
+<div class="bg-white rounded-xl border border-outline-variant/50 p-5 flex flex-col justify-between group hover:border-primary-fixed-dim transition-colors relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-[64px] text-primary">group</span>
+</div>
+<div class="flex justify-between items-start mb-4 relative z-10">
+<span class="text-secondary font-medium text-[13px]">Contactos Totales</span>
+<span class="flex items-center text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded font-medium">
+<span class="material-symbols-outlined text-[14px]">trending_up</span> 12%
+                            </span>
+</div>
+<div class="relative z-10">
+<div class="font-headline-lg text-headline-lg text-on-surface">24,592</div>
+<p class="text-xs text-secondary mt-1">En 45 segmentos</p>
+</div>
+</div>
+<!-- KPI 2 -->
+<div class="bg-white rounded-xl border border-outline-variant/50 p-5 flex flex-col justify-between group hover:border-primary-fixed-dim transition-colors relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-[64px] text-tertiary">pie_chart</span>
+</div>
+<div class="flex justify-between items-start mb-4 relative z-10">
+<span class="text-secondary font-medium text-[13px]">Segmentos Activos</span>
+<span class="flex items-center text-xs text-secondary bg-surface-container-low px-1.5 py-0.5 rounded font-medium">
+<span class="material-symbols-outlined text-[14px]">horizontal_rule</span> 0%
+                            </span>
+</div>
+<div class="relative z-10">
+<div class="font-headline-lg text-headline-lg text-on-surface">148</div>
+<p class="text-xs text-secondary mt-1">3 nuevos esta semana</p>
+</div>
+</div>
+<!-- KPI 3 AI -->
+<div class="bg-gradient-to-br from-surface to-primary-fixed/20 rounded-xl border border-primary-fixed-dim p-5 flex flex-col justify-between relative overflow-hidden shadow-sm">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary blur-3xl opacity-10 rounded-full -mr-10 -mt-10"></div>
+<div class="flex justify-between items-start mb-4 relative z-10">
+<span class="text-primary-fixed-dim font-medium text-[13px] flex items-center gap-1.5 text-on-surface">
+<span class="material-symbols-outlined text-[16px] text-primary">auto_awesome</span>
+                                Tasa de Clasificación de IA
+                            </span>
+<span class="flex items-center text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded font-medium border border-green-100">
+<span class="material-symbols-outlined text-[14px]">trending_up</span> 4.2%
+                            </span>
+</div>
+<div class="relative z-10">
+<div class="font-headline-lg text-headline-lg text-on-surface">94.8%</div>
+<p class="text-xs text-secondary mt-1">Promedio de puntuación de confianza</p>
+</div>
+<!-- Micro progress bar -->
+<div class="w-full bg-white rounded-full h-1.5 mt-4 relative z-10 overflow-hidden">
+<div class="bg-primary h-1.5 rounded-full" style="width: 94.8%"></div>
+</div>
+</div>
+<!-- KPI 4 -->
+<div class="bg-white rounded-xl border border-outline-variant/50 p-5 flex flex-col justify-between group hover:border-primary-fixed-dim transition-colors relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+<span class="material-symbols-outlined text-[64px] text-secondary">timer</span>
+</div>
+<div class="flex justify-between items-start mb-4 relative z-10">
+<span class="text-secondary font-medium text-[13px]">Tiempo Medio de Respuesta</span>
+<span class="flex items-center text-xs text-error bg-error-container/30 px-1.5 py-0.5 rounded font-medium">
+<span class="material-symbols-outlined text-[14px]">trending_down</span> 2m
+                            </span>
+</div>
+<div class="relative z-10">
+<div class="font-headline-lg text-headline-lg text-on-surface">1h 14m</div>
+<p class="text-xs text-secondary mt-1">Resolución al primer contacto</p>
+</div>
+</div>
+</div>
+<!-- Main Grid Layout -->
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
+<!-- Chart Section -->
+<div class="lg:col-span-2 bg-white rounded-xl border border-outline-variant/50 flex flex-col">
+<div class="p-5 border-b border-outline-variant/20 flex justify-between items-center">
+<div>
+<h3 class="font-title-lg text-title-lg text-on-surface">Crecimiento de Contactos</h3>
+<p class="text-xs text-secondary">Nuevos contactos netos en los últimos 30 días</p>
+</div>
+<button class="p-1.5 text-secondary hover:text-on-surface rounded-md hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</div>
+<div class="p-5 flex-1 min-h-[300px] flex items-end justify-between gap-2 relative">
+<!-- Faux Chart Lines -->
+<div class="absolute inset-0 p-5 pointer-events-none flex flex-col justify-between">
+<div class="w-full h-px bg-outline-variant/20"></div>
+<div class="w-full h-px bg-outline-variant/20"></div>
+<div class="w-full h-px bg-outline-variant/20"></div>
+<div class="w-full h-px bg-outline-variant/20"></div>
+</div>
+<!-- Faux Bars -->
+<div class="w-full flex items-end justify-between h-[250px] z-10 px-2 pb-6">
+<div class="w-[8%] bg-surface-container-highest hover:bg-primary-fixed transition-colors rounded-t-sm h-[40%] relative group"></div>
+<div class="w-[8%] bg-surface-container-highest hover:bg-primary-fixed transition-colors rounded-t-sm h-[45%]"></div>
+<div class="w-[8%] bg-surface-container-highest hover:bg-primary-fixed transition-colors rounded-t-sm h-[35%]"></div>
+<div class="w-[8%] bg-surface-container-highest hover:bg-primary-fixed transition-colors rounded-t-sm h-[55%]"></div>
+<div class="w-[8%] bg-surface-container-highest hover:bg-primary-fixed transition-colors rounded-t-sm h-[50%]"></div>
+<div class="w-[8%] bg-primary hover:bg-primary-container transition-colors rounded-t-sm h-[75%] relative group">
+<div class="absolute -top-10 left-1/2 -translate-x-1/2 bg-on-surface text-white text-[11px] px-2 py-1 rounded hidden group-hover:block whitespace-nowrap">Pico: 450</div>
+</div>
+<div class="w-[8%] bg-surface-container-highest hover:bg-primary-fixed transition-colors rounded-t-sm h-[65%]"></div>
+<div class="w-[8%] bg-surface-container-highest hover:bg-primary-fixed transition-colors rounded-t-sm h-[80%]"></div>
+<div class="w-[8%] bg-surface-container-highest hover:bg-primary-fixed transition-colors rounded-t-sm h-[70%]"></div>
+<div class="w-[8%] bg-surface-container-highest hover:bg-primary-fixed transition-colors rounded-t-sm h-[90%]"></div>
+</div>
+<!-- X Axis Labels -->
+<div class="absolute bottom-4 left-5 right-5 flex justify-between text-[10px] font-label-md text-secondary uppercase px-2">
+<span>1 Sep</span>
+<span>7 Sep</span>
+<span>14 Sep</span>
+<span>21 Sep</span>
+<span>30 Sep</span>
+</div>
+</div>
+</div>
+<!-- Activity Feed -->
+<div class="bg-white rounded-xl border border-outline-variant/50 flex flex-col h-[400px]">
+<div class="p-5 border-b border-outline-variant/20 flex justify-between items-center">
+<div>
+<h3 class="font-title-lg text-title-lg text-on-surface flex items-center gap-2">
+<span class="material-symbols-outlined text-[18px] text-primary">robot_2</span>
+                                    Feed de Actividad de IA
+                                </h3>
+</div>
+<span class="bg-primary-fixed text-primary-fixed-dim px-2 py-0.5 rounded text-[11px] font-medium text-on-primary-fixed">En vivo</span>
+</div>
+<div class="p-5 overflow-y-auto flex-1 space-y-4">
+<!-- Feed Item -->
+<div class="flex gap-3">
+<div class="mt-1 w-8 h-8 rounded-full bg-primary-fixed/50 flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[16px] text-primary">label</span>
+</div>
+<div>
+<p class="text-[13px] text-on-surface"><span class="font-medium">Sarah Jenkins</span> fue clasificada automáticamente como <span class="bg-surface-container-high px-1.5 py-0.5 rounded text-xs border border-outline-variant/30">Intención Alta</span></p>
+<p class="text-[11px] text-secondary mt-0.5">Basado en la vista de la página de precios • hace 2 minutos</p>
+</div>
+</div>
+<!-- Feed Item -->
+<div class="flex gap-3">
+<div class="mt-1 w-8 h-8 rounded-full bg-secondary-fixed flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[16px] text-secondary">forum</span>
+</div>
+<div>
+<p class="text-[13px] text-on-surface">Nuevo análisis de sentimiento en el hilo de TechCorp: <span class="text-green-600 font-medium">Positivo</span></p>
+<p class="text-[11px] text-secondary mt-0.5">Confianza: 89% • hace 15 minutos</p>
+</div>
+</div>
+<!-- Feed Item -->
+<div class="flex gap-3">
+<div class="mt-1 w-8 h-8 rounded-full bg-tertiary-fixed flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[16px] text-tertiary">merge_type</span>
+</div>
+<div>
+<p class="text-[13px] text-on-surface">Se fusionaron 3 contactos duplicados de <span class="font-medium">Michael Chen</span></p>
+<p class="text-[11px] text-secondary mt-0.5">Resolución automática • hace 1 hora</p>
+</div>
+</div>
+<!-- Feed Item -->
+<div class="flex gap-3">
+<div class="mt-1 w-8 h-8 rounded-full bg-primary-fixed/50 flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-[16px] text-primary">label</span>
+</div>
+<div>
+<p class="text-[13px] text-on-surface"><span class="font-medium">Acme Corp</span> se movió al segmento <span class="bg-surface-container-high px-1.5 py-0.5 rounded text-xs border border-outline-variant/30">Riesgo de Abandono Enterprise</span></p>
+<p class="text-[11px] text-secondary mt-0.5">Caída de uso detectada • hace 2 horas</p>
+</div>
+</div>
+</div>
+<div class="p-3 border-t border-outline-variant/20 text-center">
+<button class="text-[13px] font-medium text-primary hover:text-primary-container transition-colors">Ver Todos los Registros</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

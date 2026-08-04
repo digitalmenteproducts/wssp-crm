@@ -1,0 +1,38 @@
+---
+description: Arquitectura y convenciones de WhatsCRM AI (MVP)
+alwaysApply: true
+---
+
+# WhatsCRM AI — Arquitectura
+
+Producto: **WhatsCRM AI** (`whatscrm-mvp`). Fuente de requisitos: `docs/PRD.pdf`.
+
+## Stack
+
+- Next.js App Router + TypeScript + Tailwind + shadcn/ui
+- Backend en Next.js (Route Handlers + Server Actions); sin Edge Functions
+- Supabase: PostgreSQL + Auth vía `@supabase/supabase-js` y `@supabase/ssr`
+- Validación con Zod; sin Prisma en esta versión
+- Sin `any`; secretos solo en servidor
+
+## Capas
+
+| Capa | Ubicación | Responsabilidad |
+|------|-----------|-----------------|
+| UI | `src/app`, `src/components` | Server Components por defecto; Client solo si hace falta |
+| API | `src/app/api` | Route Handlers delgados; sin lógica de negocio compleja |
+| Negocio | `src/services/*` | Casos de uso (auth, contacts, whatsapp, openai, segmentation, templates) |
+| Datos | `src/repositories` | Acceso a Supabase / persistencia |
+| Contratos | `src/schemas`, `src/types` | Zod schemas y tipos compartidos |
+| Infra | `src/lib`, `src/config` | Clientes Supabase, env, utilidades |
+
+Flujo: UI/API → `services` → `repositories` → Supabase.
+
+## Reglas
+
+- No implementar features fuera del PRD ni saltar sprints sin pedirlo
+- OpenAI y WhatsApp Cloud API solo desde servidor
+- Env en `src/lib/env.ts`; no hardcodear secretos
+- Sesión Auth: `src/proxy.ts` + `src/lib/supabase/middleware.ts` (convención Next.js 16)
+- Preferir alias `@/*`
+- Componentes UI base en `src/components/ui` (shadcn)

@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+
+<html lang="es"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>WhatsCRM AI - Plantillas</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@600;700&amp;family=Inter:wght@400;600&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "on-tertiary-fixed-variant": "#38485d",
+                    "primary-fixed-dim": "#b7c4ff",
+                    "secondary-fixed": "#dae2fd",
+                    "error-container": "#ffdad6",
+                    "inverse-primary": "#b7c4ff",
+                    "on-tertiary-fixed": "#0b1c30",
+                    "on-secondary": "#ffffff",
+                    "inverse-surface": "#2d3133",
+                    "tertiary-container": "#57677e",
+                    "surface-tint": "#004ced",
+                    "tertiary-fixed-dim": "#b7c8e1",
+                    "on-primary-container": "#dfe3ff",
+                    "on-primary-fixed-variant": "#0038b6",
+                    "on-error": "#ffffff",
+                    "tertiary-fixed": "#d3e4fe",
+                    "outline": "#737688",
+                    "on-error-container": "#93000a",
+                    "outline-variant": "#c3c5d9",
+                    "on-background": "#191c1e",
+                    "on-secondary-fixed": "#131b2e",
+                    "surface-container-low": "#f2f4f6",
+                    "on-secondary-container": "#5c647a",
+                    "error": "#ba1a1a",
+                    "on-surface-variant": "#434656",
+                    "on-primary": "#ffffff",
+                    "tertiary": "#3f4f65",
+                    "on-secondary-fixed-variant": "#3f465c",
+                    "surface-bright": "#f7f9fb",
+                    "primary-fixed": "#dde1ff",
+                    "primary-container": "#0052ff",
+                    "on-primary-fixed": "#001452",
+                    "surface-container-highest": "#e0e3e5",
+                    "secondary": "#565e74",
+                    "surface-container-high": "#e6e8ea",
+                    "surface": "#f7f9fb",
+                    "secondary-fixed-dim": "#bec6e0",
+                    "primary": "#003ec7",
+                    "secondary-container": "#dae2fd",
+                    "background": "#f7f9fb",
+                    "surface-variant": "#e0e3e5",
+                    "surface-container": "#eceef0",
+                    "on-tertiary-container": "#d6e6ff",
+                    "inverse-on-surface": "#eff1f3",
+                    "on-surface": "#191c1e",
+                    "surface-container-lowest": "#ffffff",
+                    "on-tertiary": "#ffffff",
+                    "surface-dim": "#d8dadc"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "unit-md": "16px",
+                    "gutter": "24px",
+                    "unit-xs": "4px",
+                    "unit-xl": "48px",
+                    "unit-lg": "24px",
+                    "unit-sm": "8px",
+                    "container-max": "1440px",
+                    "margin-page": "32px",
+                    "sidebar-width": "260px"
+            },
+            "fontFamily": {
+                    "display-lg": [
+                            "Hanken Grotesk"
+                    ],
+                    "title-lg": [
+                            "Inter"
+                    ],
+                    "headline-md": [
+                            "Hanken Grotesk"
+                    ],
+                    "body-lg": [
+                            "Inter"
+                    ],
+                    "body-md": [
+                            "Inter"
+                    ],
+                    "headline-lg": [
+                            "Hanken Grotesk"
+                    ],
+                    "label-md": [
+                            "JetBrains Mono"
+                    ],
+                    "headline-lg-mobile": [
+                            "Hanken Grotesk"
+                    ]
+            },
+            "fontSize": {
+                    "display-lg": [
+                            "48px",
+                            {
+                                    "lineHeight": "56px",
+                                    "letterSpacing": "-0.02em",
+                                    "fontWeight": "700"
+                            }
+                    ],
+                    "title-lg": [
+                            "18px",
+                            {
+                                    "lineHeight": "28px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "headline-md": [
+                            "24px",
+                            {
+                                    "lineHeight": "32px",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "body-lg": [
+                            "16px",
+                            {
+                                    "lineHeight": "24px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "body-md": [
+                            "14px",
+                            {
+                                    "lineHeight": "20px",
+                                    "fontWeight": "400"
+                            }
+                    ],
+                    "headline-lg": [
+                            "32px",
+                            {
+                                    "lineHeight": "40px",
+                                    "letterSpacing": "-0.01em",
+                                    "fontWeight": "600"
+                            }
+                    ],
+                    "label-md": [
+                            "12px",
+                            {
+                                    "lineHeight": "16px",
+                                    "letterSpacing": "0.02em",
+                                    "fontWeight": "500"
+                            }
+                    ],
+                    "headline-lg-mobile": [
+                            "28px",
+                            {
+                                    "lineHeight": "36px",
+                                    "fontWeight": "600"
+                            }
+                    ]
+            }
+        },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface font-body-md antialiased overflow-x-hidden">
+<!-- SideNavBar -->
+<nav class="hidden md:flex flex-col h-full py-unit-lg px-unit-md bg-on-secondary-fixed dark:bg-on-secondary-fixed fixed left-0 top-0 w-[260px] border-r border-outline-variant/10 z-50">
+<div class="flex items-center gap-3 mb-unit-xl px-2">
+<div class="w-8 h-8 rounded bg-primary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-white text-sm fill" data-icon="forum">forum</span>
+</div>
+<div>
+<h1 class="font-headline-md text-headline-md font-bold text-white tracking-tight">WhatsCRM AI</h1>
+<p class="font-body-md text-body-md text-on-secondary-fixed-variant text-xs">CRM Inteligente</p>
+</div>
+</div>
+<div class="mb-unit-lg">
+<button class="w-full bg-primary-container text-white rounded py-2 px-4 font-body-md text-body-md font-medium hover:bg-primary transition-colors flex items-center justify-center gap-2 border-t border-white/20">
+<span class="material-symbols-outlined text-sm" data-icon="add">add</span>
+                Nueva Campaña
+            </button>
+</div>
+<ul class="flex-1 flex flex-col gap-1">
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-secondary-fixed-variant hover:text-white hover:bg-white/5 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="dashboard">dashboard</span>
+                    Panel de Control
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-secondary-fixed-variant hover:text-white hover:bg-white/5 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="kanban">cloud_download</span>
+                    Contactos
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-secondary-fixed-variant hover:text-white hover:bg-white/5 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="groups">groups</span>
+                    Segmentos
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded bg-white/10 text-white border-l-2 border-primary-fixed-dim transition-colors font-body-md text-body-md transform active:scale-[0.98]" href="#">
+<span class="material-symbols-outlined text-[20px] fill" data-icon="description">description</span>
+                    Plantillas
+                </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-secondary-fixed-variant hover:text-white hover:bg-white/5 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="settings">settings</span>
+                    Configuración
+                </a>
+</li>
+</ul>
+<div class="mt-auto pt-unit-lg border-t border-white/10">
+<ul class="flex flex-col gap-1">
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-secondary-fixed-variant hover:text-white hover:bg-white/5 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="help_outline">help_outline</span>
+                        Ayuda
+                    </a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded text-on-secondary-fixed-variant hover:text-white hover:bg-white/5 transition-colors font-body-md text-body-md" href="#">
+<span class="material-symbols-outlined text-[20px]" data-icon="corporate_fare">corporate_fare</span>
+                        Organización
+                    </a>
+</li>
+</ul>
+</div>
+</nav>
+<!-- Main Content Area -->
+<main class="md:ml-[260px] min-h-screen flex flex-col">
+<!-- TopAppBar -->
+<header class="flex justify-between items-center px-gutter max-w-container-max w-full h-16 bg-surface dark:bg-surface-dim border-b border-surface-container-highest z-40 sticky top-0">
+<div class="flex items-center gap-6 flex-1">
+<div class="relative w-64 md:block hidden">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-sm" data-icon="search">search</span>
+<input class="w-full bg-surface-container-low border border-outline-variant/50 rounded-full py-1.5 pl-9 pr-4 font-body-md text-body-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-shadow" placeholder="Buscar plantillas..." type="text"/>
+</div>
+<nav class="hidden lg:flex items-center gap-6">
+<a class="font-title-lg text-title-lg text-secondary hover:text-primary transition-all" href="#">Analíticas</a>
+<a class="font-title-lg text-title-lg text-secondary hover:text-primary transition-all" href="#">Equipo</a>
+<a class="font-title-lg text-title-lg text-secondary hover:text-primary transition-all" href="#">Registros</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="hidden md:block bg-surface-container-lowest border border-outline-variant text-on-surface hover:bg-surface-container-low transition-colors rounded py-1.5 px-4 font-body-md text-body-md font-medium">
+                    Invitar Usuario
+                </button>
+<div class="flex items-center gap-2">
+<button class="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-low rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="p-2 text-on-surface-variant hover:text-primary hover:bg-surface-container-low rounded-full transition-colors flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Canvas -->
+<div class="flex-1 p-margin-page max-w-container-max mx-auto w-full">
+<!-- Page Header -->
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-unit-xl">
+<div>
+<h2 class="font-display-lg text-display-lg md:text-[36px] md:leading-[44px] text-on-surface mb-1">Biblioteca de Plantillas</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant">Gestiona y optimiza tus plantillas de mensajes de WhatsApp.</p>
+</div>
+<button class="bg-primary text-white rounded px-6 py-2.5 font-body-md text-body-md font-medium hover:bg-on-primary-fixed-variant transition-colors flex items-center gap-2 w-full sm:w-auto justify-center border-t border-white/20">
+<span class="material-symbols-outlined text-[18px]" data-icon="add_circle">add_circle</span>
+                    Crear Plantilla
+                </button>
+</div>
+<!-- Filters -->
+<div class="flex flex-wrap items-center gap-2 mb-unit-lg">
+<button class="bg-secondary-container text-on-secondary-fixed border border-transparent rounded-full px-4 py-1.5 font-label-md text-label-md transition-colors">Todas las Plantillas</button>
+<button class="bg-surface-container-lowest text-on-surface-variant border border-outline-variant hover:bg-surface-container-low rounded-full px-4 py-1.5 font-label-md text-label-md transition-colors">Mensaje de Bienvenida</button>
+<button class="bg-surface-container-lowest text-on-surface-variant border border-outline-variant hover:bg-surface-container-low rounded-full px-4 py-1.5 font-label-md text-label-md transition-colors">Promocional</button>
+<button class="bg-surface-container-lowest text-on-surface-variant border border-outline-variant hover:bg-surface-container-low rounded-full px-4 py-1.5 font-label-md text-label-md transition-colors">Seguimiento</button>
+<button class="bg-surface-container-lowest text-on-surface-variant border border-outline-variant hover:bg-surface-container-low rounded-full px-4 py-1.5 font-label-md text-label-md transition-colors">Transaccional</button>
+</div>
+<!-- Bento Grid Gallery -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-gutter">
+<!-- Template Card 1 -->
+<div class="bg-surface-container-lowest border border-surface-container-highest rounded-xl p-unit-md flex flex-col hover:shadow-md transition-shadow group relative overflow-hidden">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary-fixed-dim/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-2">
+<span class="bg-tertiary-fixed text-on-tertiary-fixed rounded-full px-2.5 py-0.5 font-label-md text-[10px] uppercase tracking-wider">Bienvenida</span>
+</div>
+<button class="text-outline hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface mb-2">Onboarding de Nuevo Usuario V1</h3>
+<div class="bg-surface-container-low rounded-lg p-3 mb-4 flex-1 border border-outline-variant/30 text-on-surface-variant text-sm font-body-md line-clamp-3 relative">
+                        "¡Hola {{1}}, bienvenido a WhatsCRM! 🚀 Estamos encantados de tenerte. Para empezar, ¿te gustaría hacer un recorrido rápido por nuestras funciones?"
+                        <div class="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-surface-container-low to-transparent rounded-b-lg"></div>
+</div>
+<div class="grid grid-cols-2 gap-4 pt-3 border-t border-surface-container-highest">
+<div>
+<p class="font-label-md text-label-md text-outline uppercase mb-1">Tasa de Apertura</p>
+<p class="font-title-lg text-title-lg text-on-surface flex items-center gap-1">
+                                92.4% 
+                                <span class="material-symbols-outlined text-[14px] text-green-600" data-icon="trending_up">trending_up</span>
+</p>
+</div>
+<div>
+<p class="font-label-md text-label-md text-outline uppercase mb-1">Tasa de Respuesta</p>
+<p class="font-title-lg text-title-lg text-on-surface">45.2%</p>
+</div>
+</div>
+</div>
+<!-- Template Card 2 -->
+<div class="bg-surface-container-lowest border border-surface-container-highest rounded-xl p-unit-md flex flex-col hover:shadow-md transition-shadow group relative overflow-hidden">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary-fixed-dim/20 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-2">
+<span class="bg-error-container text-on-error-container rounded-full px-2.5 py-0.5 font-label-md text-[10px] uppercase tracking-wider">Promocional</span>
+</div>
+<button class="text-outline hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface mb-2">Oferta Especial de Verano</h3>
+<div class="bg-surface-container-low rounded-lg p-3 mb-4 flex-1 border border-outline-variant/30 text-on-surface-variant text-sm font-body-md line-clamp-3 relative">
+                        "¡Hola {{1}}! ☀️ Nuestra oferta de verano ya está aquí. Obtén un 30% de descuento en todos los planes premium usando el código SUMMER30. ¡La oferta termina en 48 horas!"
+                        <div class="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-surface-container-low to-transparent rounded-b-lg"></div>
+</div>
+<div class="grid grid-cols-2 gap-4 pt-3 border-t border-surface-container-highest">
+<div>
+<p class="font-label-md text-label-md text-outline uppercase mb-1">Tasa de Apertura</p>
+<p class="font-title-lg text-title-lg text-on-surface">78.1%</p>
+</div>
+<div>
+<p class="font-label-md text-label-md text-outline uppercase mb-1">Tasa de Respuesta</p>
+<p class="font-title-lg text-title-lg text-on-surface flex items-center gap-1">
+                                12.8%
+                                <span class="material-symbols-outlined text-[14px] text-green-600" data-icon="trending_up">trending_up</span>
+</p>
+</div>
+</div>
+</div>
+<!-- Template Card 3 -->
+<div class="bg-surface-container-lowest border border-surface-container-highest rounded-xl p-unit-md flex flex-col hover:shadow-md transition-shadow group relative overflow-hidden">
+<div class="absolute bottom-0 left-0 w-40 h-40 bg-secondary-fixed/30 rounded-full blur-3xl -ml-16 -mb-16 pointer-events-none"></div>
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-2">
+<span class="bg-secondary-container text-on-secondary-container rounded-full px-2.5 py-0.5 font-label-md text-[10px] uppercase tracking-wider">Seguimiento</span>
+</div>
+<button class="text-outline hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface mb-2">Recordatorio de Carrito Abandonado</h3>
+<div class="bg-surface-container-low rounded-lg p-3 mb-4 flex-1 border border-outline-variant/30 text-on-surface-variant text-sm font-body-md line-clamp-3 relative">
+                        "Hola {{1}}, notamos que dejaste algunos artículos en tu carrito. 🛒 ¿Aún tienes interés? ¡Avísanos si necesitas ayuda!"
+                        <div class="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-surface-container-low to-transparent rounded-b-lg"></div>
+</div>
+<div class="grid grid-cols-2 gap-4 pt-3 border-t border-surface-container-highest">
+<div>
+<p class="font-label-md text-label-md text-outline uppercase mb-1">Tasa de Apertura</p>
+<p class="font-title-lg text-title-lg text-on-surface flex items-center gap-1">
+                                85.5%
+                                <span class="material-symbols-outlined text-[14px] text-red-500" data-icon="trending_down">trending_down</span>
+</p>
+</div>
+<div>
+<p class="font-label-md text-label-md text-outline uppercase mb-1">Tasa de Respuesta</p>
+<p class="font-title-lg text-title-lg text-on-surface">22.4%</p>
+</div>
+</div>
+</div>
+<!-- Template Card 4 -->
+<div class="bg-surface-container-lowest border border-surface-container-highest rounded-xl p-unit-md flex flex-col hover:shadow-md transition-shadow group relative overflow-hidden">
+<div class="flex justify-between items-start mb-4">
+<div class="flex items-center gap-2">
+<span class="bg-surface-variant text-on-surface-variant rounded-full px-2.5 py-0.5 font-label-md text-[10px] uppercase tracking-wider">Transaccional</span>
+</div>
+<button class="text-outline hover:text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[20px]" data-icon="more_vert">more_vert</span>
+</button>
+</div>
+<h3 class="font-title-lg text-title-lg text-on-surface mb-2">Confirmación de Pedido</h3>
+<div class="bg-surface-container-low rounded-lg p-3 mb-4 flex-1 border border-outline-variant/30 text-on-surface-variant text-sm font-body-md line-clamp-3 relative">
+                        "¡Pedido #{{1}} confirmado! ✅ Gracias por comprar con nosotros, {{2}}. Te notificaremos una vez que se envíe."
+                        <div class="absolute bottom-0 left-0 w-full h-8 bg-gradient-to-t from-surface-container-low to-transparent rounded-b-lg"></div>
+</div>
+<div class="grid grid-cols-2 gap-4 pt-3 border-t border-surface-container-highest">
+<div>
+<p class="font-label-md text-label-md text-outline uppercase mb-1">Tasa de Apertura</p>
+<p class="font-title-lg text-title-lg text-on-surface">98.2%</p>
+</div>
+<div>
+<p class="font-label-md text-label-md text-outline uppercase mb-1">Tasa de Respuesta</p>
+<p class="font-title-lg text-title-lg text-on-surface">3.1%</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
