@@ -134,7 +134,8 @@ export function IntegrationsSettingsForm({
           className="h-10 rounded-lg border-outline-variant bg-muted font-mono text-xs"
         />
         <p className="text-xs text-secondary">
-          Configúrala en Meta cuando implementemos el webhook (Sprint 2).
+          Configúrala en Meta Developer → WhatsApp → Configuration → Callback
+          URL. El Verify Token debe coincidir con el de arriba.
         </p>
       </div>
 

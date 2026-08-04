@@ -19,6 +19,13 @@ export type ConversationAiStatus =
 export type MessageDirection = "inbound" | "outbound";
 
 export type {
+  Contact,
+  Conversation,
+  InboundWhatsAppMessage,
+  Message,
+} from "@/types/whatsapp";
+
+export type {
   Business,
   BusinessRole,
   BusinessSettings,
