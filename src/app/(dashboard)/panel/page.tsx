@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { APP_NAME } from "@/config/app";
 import { getCurrentUser } from "@/repositories/auth.repository";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Panel de control",
 };
