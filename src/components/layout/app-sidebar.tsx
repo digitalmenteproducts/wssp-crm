@@ -6,6 +6,7 @@ import {
   HelpCircle,
   LayoutDashboard,
   Layers,
+  Megaphone,
   Plus,
   Settings,
   Users,
@@ -29,6 +30,7 @@ const PRIMARY_NAV: NavItem[] = [
   { href: ROUTES.contactos, label: "Contactos", icon: Users },
   { href: ROUTES.segmentos, label: "Segmentos", icon: Layers },
   { href: ROUTES.plantillas, label: "Plantillas", icon: FileText },
+  { href: ROUTES.campanas, label: "Campañas", icon: Megaphone },
   { href: ROUTES.configuracion, label: "Configuración", icon: Settings },
 ];
 
