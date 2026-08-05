@@ -20,3 +20,19 @@ export const reanalyzeContactSchema = z.object({
 });
 
 export type ReanalyzeContactInput = z.infer<typeof reanalyzeContactSchema>;
+
+export const contactTagSchema = z.object({
+  label: z.string().trim().min(1).max(60),
+  source: z.enum(["ai", "manual"]),
+});
+
+export const updateContactTagsSchema = z.object({
+  contactId: z.string().uuid("Contacto inválido."),
+  tags: z.array(contactTagSchema).max(40),
+});
+
+export type UpdateContactTagsInput = z.infer<typeof updateContactTagsSchema>;
+
+export const getContactDetailSchema = z.object({
+  contactId: z.string().uuid("Contacto inválido."),
+});

@@ -14,16 +14,10 @@ import {
   type ContactBoard,
   type ContactBoardCard,
 } from "@/types/contacts";
+import { parseContactTags } from "@/services/contacts/detail.service";
 
 function formatZodIssues(error: { issues: { message: string }[] }): string {
   return error.issues.map((issue) => issue.message).join(" ");
-}
-
-function extractTags(attributes: Record<string, unknown> | null): string[] {
-  if (!attributes) return [];
-  const tags = attributes.tags;
-  if (!Array.isArray(tags)) return [];
-  return tags.filter((tag): tag is string => typeof tag === "string").slice(0, 4);
 }
 
 type ConversationLite = {
@@ -73,6 +67,7 @@ export async function getBoardForCurrentBusiness(): Promise<
       segment: string | null;
       confidence: number | null;
       attributes: Record<string, unknown> | null;
+      reason?: string | null;
     }
   >();
 
@@ -93,6 +88,10 @@ export async function getBoardForCurrentBusiness(): Promise<
     const conversation = asConversation(contact.conversations);
     const analysis = latestAnalysis.get(contact.id);
     const conversationId = conversation?.id ?? null;
+    const tags = parseContactTags(analysis?.attributes ?? null, {
+      reason: analysis?.reason ?? null,
+      segment: analysis?.segment ?? null,
+    }).map((tag) => tag.label);
 
     return {
       id: contact.id,
@@ -107,7 +106,7 @@ export async function getBoardForCurrentBusiness(): Promise<
       product: analysis?.product ?? null,
       summary: analysis?.summary ?? null,
       segment: analysis?.segment ?? null,
-      tags: extractTags(analysis?.attributes ?? null),
+      tags: tags.slice(0, 6),
       confidence: analysis?.confidence ?? null,
       aiStatus: conversation?.ai_status ?? null,
     };

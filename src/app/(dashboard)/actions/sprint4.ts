@@ -4,7 +4,8 @@ import { revalidatePath } from "next/cache";
 
 import { ROUTES } from "@/config/app";
 import * as boardService from "@/services/contacts/board.service";
-import type { ContactBoardStatus } from "@/types";
+import * as detailService from "@/services/contacts/detail.service";
+import type { ContactBoardStatus, ContactDetail, ContactTag } from "@/types";
 
 export type BoardActionState = {
   error?: string;
@@ -42,4 +43,31 @@ export async function reanalyzeContactAction(input: {
   }
 
   return { message: "Contacto reanalizado." };
+}
+
+export async function getContactDetailAction(input: {
+  contactId: string;
+}): Promise<
+  { ok: true; detail: ContactDetail } | { ok: false; error: string }
+> {
+  return detailService.getContactDetailForCurrentBusiness(input.contactId);
+}
+
+export async function updateContactTagsAction(input: {
+  contactId: string;
+  tags: ContactTag[];
+}): Promise<
+  | { ok: true; tags: ContactTag[]; message: string }
+  | { ok: false; error: string }
+> {
+  const result = await detailService.updateContactTagsForCurrentBusiness(input);
+
+  revalidatePath(ROUTES.contactos);
+  revalidatePath(ROUTES.segmentos);
+
+  if (!result.ok) {
+    return { ok: false, error: result.error };
+  }
+
+  return { ok: true, tags: result.tags, message: "Etiquetas guardadas." };
 }

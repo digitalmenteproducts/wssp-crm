@@ -10,6 +10,7 @@ import {
 
 import { moveContactAction } from "@/app/(dashboard)/actions/sprint4";
 import { ContactCard } from "@/components/contacts/contact-card";
+import { ContactDrawer } from "@/components/contacts/contact-drawer";
 import type { ContactBoard, ContactBoardStatus } from "@/types";
 import { CONTACT_BOARD_LABELS, CONTACT_BOARD_STATUSES } from "@/types/contacts";
 
@@ -27,6 +28,9 @@ type ContactBoardViewProps = {
 
 export function ContactBoardView({ board }: ContactBoardViewProps) {
   const [columns, setColumns] = useState(board.columns);
+  const [selectedContactId, setSelectedContactId] = useState<string | null>(
+    null,
+  );
   const [feedback, setFeedback] = useState<{
     error?: string;
     message?: string;
@@ -47,7 +51,9 @@ export function ContactBoardView({ board }: ContactBoardViewProps) {
 
   function moveOptimistic(contactId: string, status: ContactBoardStatus) {
     setColumns((prev) => {
-      const card = prev.flatMap((column) => column.cards).find((c) => c.id === contactId);
+      const card = prev
+        .flatMap((column) => column.cards)
+        .find((item) => item.id === contactId);
       if (!card) return prev;
 
       return CONTACT_BOARD_STATUSES.map((columnStatus) => {
@@ -66,6 +72,17 @@ export function ContactBoardView({ board }: ContactBoardViewProps) {
         };
       });
     });
+  }
+
+  function patchCardTags(contactId: string, tags: string[]) {
+    setColumns((prev) =>
+      prev.map((column) => ({
+        ...column,
+        cards: column.cards.map((card) =>
+          card.id === contactId ? { ...card, tags: tags.slice(0, 6) } : card,
+        ),
+      })),
+    );
   }
 
   function handleDrop(status: ContactBoardStatus, event: DragEvent) {
@@ -136,18 +153,14 @@ export function ContactBoardView({ board }: ContactBoardViewProps) {
             <div className="flex min-h-[120px] flex-1 flex-col gap-3">
               {column.cards.length === 0 ? (
                 <div className="rounded-md border border-dashed border-outline-variant/70 px-3 py-6 text-center text-xs text-secondary">
-                  {total === 0
-                    ? "Sin contactos aún"
-                    : "Suelta aquí"}
+                  {total === 0 ? "Sin contactos aún" : "Suelta aquí"}
                 </div>
               ) : (
                 column.cards.map((card) => (
                   <ContactCard
                     key={card.id}
                     card={card}
-                    onOptimisticMove={moveOptimistic}
-                    onError={(message) => setFeedback({ error: message })}
-                    onMessage={(message) => setFeedback({ message })}
+                    onOpen={setSelectedContactId}
                   />
                 ))
               )}
@@ -155,6 +168,14 @@ export function ContactBoardView({ board }: ContactBoardViewProps) {
           </section>
         ))}
       </div>
+
+      <ContactDrawer
+        contactId={selectedContactId}
+        onClose={() => setSelectedContactId(null)}
+        onStatusChange={moveOptimistic}
+        onTagsChange={patchCardTags}
+        onFeedback={setFeedback}
+      />
     </div>
   );
 }

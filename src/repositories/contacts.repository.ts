@@ -1,3 +1,4 @@
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { ContactBoardStatus } from "@/types";
 
@@ -28,6 +29,7 @@ type AnalysisBoardRow = {
   segment: string | null;
   confidence: number | null;
   attributes: Record<string, unknown> | null;
+  reason: string | null;
   created_at: string;
 };
 
@@ -64,8 +66,8 @@ export async function listBoardContactRows(businessId: string) {
       supabase
         .from("ai_analysis")
         .select(
-          "contact_id, summary, product, segment, confidence, attributes, created_at",
-        )
+      "contact_id, summary, product, segment, confidence, attributes, reason, created_at",
+    )
         .eq("business_id", businessId)
         .order("created_at", { ascending: false })
         .returns<AnalysisBoardRow[]>(),
@@ -124,4 +126,90 @@ export async function getContactConversationId(input: {
     .eq("business_id", input.businessId)
     .eq("contact_id", input.contactId)
     .maybeSingle<{ id: string }>();
+}
+
+export async function getContactDetailRows(input: {
+  businessId: string;
+  contactId: string;
+}) {
+  const supabase = await createClient();
+
+  const contact = await supabase
+    .from("contacts")
+    .select(
+      `
+      id,
+      phone,
+      name,
+      status,
+      conversations (
+        id,
+        last_message_at,
+        ai_status
+      )
+    `,
+    )
+    .eq("business_id", input.businessId)
+    .eq("id", input.contactId)
+    .maybeSingle<ContactBoardRow>();
+
+  if (contact.error || !contact.data) {
+    return { contact, analysis: null, messages: null };
+  }
+
+  const conversation = Array.isArray(contact.data.conversations)
+    ? contact.data.conversations[0]
+    : contact.data.conversations;
+
+  const [analysis, messages] = await Promise.all([
+    supabase
+      .from("ai_analysis")
+      .select(
+        "id, contact_id, summary, product, subcategory, intent, reason, segment, confidence, attributes, created_at",
+      )
+      .eq("business_id", input.businessId)
+      .eq("contact_id", input.contactId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle<{
+        id: string;
+        contact_id: string;
+        summary: string | null;
+        product: string | null;
+        subcategory: string | null;
+        intent: string | null;
+        reason: string | null;
+        segment: string | null;
+        confidence: number | null;
+        attributes: Record<string, unknown> | null;
+        created_at: string;
+      }>(),
+    conversation?.id
+      ? supabase
+          .from("messages")
+          .select("id, direction, type, body, created_at")
+          .eq("business_id", input.businessId)
+          .eq("conversation_id", conversation.id)
+          .order("created_at", { ascending: true })
+          .limit(200)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  return { contact, analysis, messages };
+}
+
+export async function updateLatestAnalysisAttributes(input: {
+  businessId: string;
+  analysisId: string;
+  attributes: Record<string, unknown>;
+}) {
+  const supabase = createAdminClient();
+
+  return supabase
+    .from("ai_analysis")
+    .update({ attributes: input.attributes })
+    .eq("id", input.analysisId)
+    .eq("business_id", input.businessId)
+    .select("id, attributes")
+    .maybeSingle<{ id: string; attributes: Record<string, unknown> }>();
 }

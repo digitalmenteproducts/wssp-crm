@@ -37,6 +37,8 @@ export type {
   ContactBoard,
   ContactBoardCard,
   ContactBoardColumn,
+  ContactDetail,
+  ContactTag,
 } from "@/types/contacts";
 
 export {

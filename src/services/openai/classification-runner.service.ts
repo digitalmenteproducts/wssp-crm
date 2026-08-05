@@ -87,7 +87,27 @@ export async function classifySingleConversation(
       reason: result.reason,
       segment: result.segment,
       confidence: result.confidence,
-      attributes: result.attributes,
+      attributes: (() => {
+        const base =
+          result.attributes && typeof result.attributes === "object"
+            ? { ...result.attributes }
+            : {};
+        const tags = Array.isArray(base.tags)
+          ? base.tags.filter((item): item is string => typeof item === "string")
+          : [];
+        if (result.reason?.trim() && !tags.some((tag) => tag.toLowerCase() === result.reason!.trim().toLowerCase())) {
+          tags.push(result.reason.trim());
+        }
+        if (result.segment?.trim() && !tags.some((tag) => tag.toLowerCase() === result.segment!.trim().toLowerCase())) {
+          tags.push(result.segment.trim());
+        }
+        return {
+          ...base,
+          tags,
+          ai_tags: tags,
+          manual_tags: Array.isArray(base.manual_tags) ? base.manual_tags : [],
+        };
+      })(),
       rawJson: result,
     });
 

@@ -16,6 +16,49 @@ export type ContactBoardCard = {
   aiStatus: string | null;
 };
 
+export type ContactTag = {
+  label: string;
+  source: "ai" | "manual";
+};
+
+export type ContactDetailMessage = {
+  id: string;
+  direction: "inbound" | "outbound" | string;
+  type: string;
+  body: string | null;
+  created_at: string;
+};
+
+export type ContactDetailSegment = {
+  id: string;
+  name: string;
+  origin: "ai" | "system" | "manual";
+};
+
+export type ContactDetail = {
+  id: string;
+  phone: string;
+  name: string | null;
+  status: ContactBoardStatus;
+  conversationId: string | null;
+  lastMessageAt: string | null;
+  analysis: {
+    id: string;
+    summary: string | null;
+    product: string | null;
+    subcategory: string | null;
+    intent: string | null;
+    reason: string | null;
+    segment: string | null;
+    confidence: number | null;
+    created_at: string;
+  } | null;
+  tags: ContactTag[];
+  messages: ContactDetailMessage[];
+  segments: ContactDetailSegment[];
+  similarSegmentId: string | null;
+};
+
 export type ContactBoardColumn = {
   status: ContactBoardStatus;
   label: string;
