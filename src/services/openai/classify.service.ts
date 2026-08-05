@@ -1,15 +1,29 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import {
-  classificationResultSchema,
-  type ClassificationResult,
-} from "@/schemas/ai";
+import type { ClassificationResult } from "@/schemas/ai";
+import { normalizeClassificationPayload } from "@/services/openai/normalize-classification";
 
 type ChatMessage = {
   role: "system" | "user" | "assistant";
   content: string;
 };
+
+const STRICT_JSON_CONTRACT = `
+Responde SOLO con un objeto JSON (sin markdown) usando EXACTAMENTE estas claves en inglés:
+{
+  "summary": "string",
+  "product": "string|null",
+  "subcategory": "string|null",
+  "intent": "string|null",
+  "status": "nuevo|interesado|no_compro|cliente|no_contactar",
+  "reason": "string|null",
+  "segment": "string|null",
+  "confidence": 0.0,
+  "attributes": { "delivery": false, "price_sensitive": false, "tags": [] }
+}
+No uses claves en español. status debe ser uno de esos 5 valores.
+`.trim();
 
 function loadDefaultPrompt(): string {
   try {
@@ -18,7 +32,7 @@ function loadDefaultPrompt(): string {
       "utf8",
     );
   } catch {
-    return "Analiza la conversación y responde JSON con summary, product, subcategory, intent, status, reason, segment, confidence y attributes.";
+    return "Analiza la conversación comercial de WhatsApp y clasifica al contacto.";
   }
 }
 
@@ -42,7 +56,8 @@ export async function classifyConversationWithOpenAI(input: {
   transcript: string;
   model?: string;
 }): Promise<ClassificationResult> {
-  const systemPrompt = input.systemPrompt?.trim() || loadDefaultPrompt();
+  const basePrompt = input.systemPrompt?.trim() || loadDefaultPrompt();
+  const systemPrompt = `${basePrompt}\n\n${STRICT_JSON_CONTRACT}`;
   const model = input.model ?? "gpt-4o-mini";
 
   const messages: ChatMessage[] = [
@@ -83,14 +98,13 @@ export async function classifyConversationWithOpenAI(input: {
     throw new Error("OpenAI no devolvió contenido.");
   }
 
-  const parsedJson = extractJsonObject(content);
-  const parsed = classificationResultSchema.safeParse(parsedJson);
-
-  if (!parsed.success) {
+  try {
+    const parsedJson = extractJsonObject(content);
+    return normalizeClassificationPayload(parsedJson);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : "Error desconocido";
     throw new Error(
-      `JSON de clasificación inválido: ${parsed.error.issues.map((i) => i.message).join("; ")}`,
+      `JSON de clasificación inválido: ${detail}. Raw: ${content.slice(0, 280)}`,
     );
   }
-
-  return parsed.data;
 }
