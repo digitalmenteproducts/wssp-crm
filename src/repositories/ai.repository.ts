@@ -177,6 +177,8 @@ export async function listSegmentsByBusiness(businessId: string) {
 
   const segments = (result.data ?? []).map((row) => ({
     ...row,
+    origin: (row.origin as Segment["origin"]) ?? "manual",
+    source_key: (row.source_key as string | null) ?? null,
     rules_json: row.rules_json as Segment["rules_json"],
   })) as Segment[];
 
@@ -188,6 +190,8 @@ export async function createSegment(input: {
   name: string;
   description?: string | null;
   rulesJson: Segment["rules_json"];
+  origin?: Segment["origin"];
+  sourceKey?: string | null;
 }) {
   const supabase = createAdminClient();
 
@@ -198,9 +202,46 @@ export async function createSegment(input: {
       name: input.name,
       description: input.description ?? null,
       rules_json: input.rulesJson,
+      origin: input.origin ?? "manual",
+      source_key: input.sourceKey ?? null,
     })
     .select("*")
     .single<Segment>();
+}
+
+export async function updateSegment(input: {
+  businessId: string;
+  id: string;
+  patch: Partial<{
+    name: string;
+    description: string | null;
+    rules_json: Segment["rules_json"];
+    is_active: boolean;
+  }>;
+}) {
+  const supabase = createAdminClient();
+
+  return supabase
+    .from("segments")
+    .update(input.patch)
+    .eq("id", input.id)
+    .eq("business_id", input.businessId)
+    .select("*")
+    .maybeSingle<Segment>();
+}
+
+export async function findSegmentBySourceKey(input: {
+  businessId: string;
+  sourceKey: string;
+}) {
+  const supabase = createAdminClient();
+
+  return supabase
+    .from("segments")
+    .select("*")
+    .eq("business_id", input.businessId)
+    .eq("source_key", input.sourceKey)
+    .maybeSingle<Segment>();
 }
 
 export async function listContactsWithLatestAnalysis(businessId: string) {
@@ -227,7 +268,7 @@ export async function listContactsWithLatestAnalysis(businessId: string) {
   const analyses = await supabase
     .from("ai_analysis")
     .select(
-      "contact_id, summary, product, subcategory, intent, status, reason, segment, confidence, created_at",
+      "contact_id, summary, product, subcategory, intent, status, reason, segment, confidence, attributes, created_at",
     )
     .eq("business_id", businessId)
     .order("created_at", { ascending: false });

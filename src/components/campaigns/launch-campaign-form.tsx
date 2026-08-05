@@ -15,11 +15,13 @@ const initialState: CampaignFormState = {};
 type LaunchCampaignFormProps = {
   templates: Array<{ id: string; name: string; status: string; language: string }>;
   segments: Array<{ id: string; name: string; count: number }>;
+  defaultSegmentId?: string;
 };
 
 export function LaunchCampaignForm({
   templates,
   segments,
+  defaultSegmentId,
 }: LaunchCampaignFormProps) {
   const [state, formAction, pending] = useActionState(
     launchCampaignAction,
@@ -27,6 +29,10 @@ export function LaunchCampaignForm({
   );
 
   const approved = templates.filter((item) => item.status === "approved");
+  const selectedSegment =
+    defaultSegmentId && segments.some((item) => item.id === defaultSegmentId)
+      ? defaultSegmentId
+      : "";
 
   return (
     <form
@@ -54,7 +60,7 @@ export function LaunchCampaignForm({
           id="segment_id"
           name="segment_id"
           required
-          defaultValue=""
+          defaultValue={selectedSegment}
           className="h-10 w-full rounded-md border border-outline-variant bg-card px-3 text-sm"
         >
           <option value="" disabled>

@@ -8,8 +8,9 @@ import type { ContactBoardStatus } from "@/types";
 import * as aiRepository from "@/repositories/ai.repository";
 import { createSegmentSchema, type CreateSegmentInput } from "@/schemas/ai";
 import * as businessService from "@/services/business/business.service";
+import { summarizeRules } from "@/lib/segments/rules";
 
-type AnalysisLite = {
+export type AnalysisLite = {
   contact_id: string;
   summary: string | null;
   product: string | null;
@@ -18,8 +19,27 @@ type AnalysisLite = {
   status: string | null;
   reason: string | null;
   segment: string | null;
+  attributes?: Record<string, unknown> | null;
   created_at: string;
 };
+
+export type ContactForSegment = {
+  id: string;
+  phone: string;
+  name: string | null;
+  status: string;
+  conversations?:
+    | { last_message_at?: string | null }
+    | { last_message_at?: string | null }[]
+    | null;
+};
+
+function extractTags(attributes: Record<string, unknown> | null | undefined) {
+  if (!attributes) return [] as string[];
+  const tags = attributes.tags;
+  if (!Array.isArray(tags)) return [];
+  return tags.filter((tag): tag is string => typeof tag === "string");
+}
 
 function evaluateCondition(
   condition: SegmentRuleCondition,
@@ -30,9 +50,34 @@ function evaluateCondition(
     contactStatus: string;
     reason: string | null;
     segment: string | null;
+    tags: string[];
     lastMessageAt: string | null;
   },
 ): boolean {
+  if (condition.field === "last_message_within_days") {
+    if (!ctx.lastMessageAt) {
+      return false;
+    }
+    const days =
+      (Date.now() - new Date(ctx.lastMessageAt).getTime()) /
+      (1000 * 60 * 60 * 24);
+    const value = Number(condition.value);
+    if (condition.op === "lte") return days <= value;
+    if (condition.op === "gte") return days >= value;
+    return false;
+  }
+
+  if (condition.field === "tag") {
+    const needle = String(condition.value).toLowerCase();
+    if (condition.op === "eq") {
+      return ctx.tags.some((tag) => tag.toLowerCase() === needle);
+    }
+    if (condition.op === "contains") {
+      return ctx.tags.some((tag) => tag.toLowerCase().includes(needle));
+    }
+    return false;
+  }
+
   const raw =
     condition.field === "product"
       ? ctx.product
@@ -47,19 +92,6 @@ function evaluateCondition(
               : condition.field === "segment"
                 ? ctx.segment
                 : null;
-
-  if (condition.field === "last_message_within_days") {
-    if (!ctx.lastMessageAt) {
-      return false;
-    }
-    const days =
-      (Date.now() - new Date(ctx.lastMessageAt).getTime()) /
-      (1000 * 60 * 60 * 24);
-    const value = Number(condition.value);
-    if (condition.op === "lte") return days <= value;
-    if (condition.op === "gte") return days >= value;
-    return false;
-  }
 
   const left = String(raw ?? "").toLowerCase();
   const right = String(condition.value).toLowerCase();
@@ -84,6 +116,7 @@ export function matchSegmentRules(
     contactStatus: string;
     reason: string | null;
     segment: string | null;
+    tags?: string[];
     lastMessageAt: string | null;
   },
 ): boolean {
@@ -91,13 +124,59 @@ export function matchSegmentRules(
     return false;
   }
 
+  const fullCtx = {
+    ...ctx,
+    tags: ctx.tags ?? [],
+  };
+
   const results = rules.conditions.map((condition) =>
-    evaluateCondition(condition, ctx),
+    evaluateCondition(condition, fullCtx),
   );
 
   return rules.operator === "or"
     ? results.some(Boolean)
     : results.every(Boolean);
+}
+
+export function getLastMessageAt(
+  contact: ContactForSegment,
+): string | null {
+  const conversations = Array.isArray(contact.conversations)
+    ? contact.conversations
+    : contact.conversations
+      ? [contact.conversations]
+      : [];
+
+  return (
+    conversations
+      .map((item) => item.last_message_at)
+      .filter(Boolean)
+      .sort()
+      .at(-1) ?? null
+  );
+}
+
+export function countMatchesForRules(
+  rules: SegmentRules,
+  contacts: ContactForSegment[],
+  latestByContact: Map<string, AnalysisLite>,
+): number {
+  let count = 0;
+  for (const contact of contacts) {
+    const analysis = latestByContact.get(contact.id);
+    const matched = matchSegmentRules(rules, {
+      product: analysis?.product ?? null,
+      subcategory: analysis?.subcategory ?? null,
+      intent: analysis?.intent ?? null,
+      contactStatus: contact.status,
+      reason: analysis?.reason ?? null,
+      segment: analysis?.segment ?? null,
+      tags: extractTags(analysis?.attributes),
+      lastMessageAt: getLastMessageAt(contact),
+    });
+    if (matched) count += 1;
+  }
+  return count;
 }
 
 export async function listSegmentsForCurrentBusiness(): Promise<
@@ -118,6 +197,34 @@ export async function listSegmentsForCurrentBusiness(): Promise<
   }
 
   return { ok: true, segments: data ?? [] };
+}
+
+export type SegmentCardData = {
+  segment: Segment;
+  count: number;
+  rulesSummary: string;
+  error: string | null;
+};
+
+export async function listSegmentCardsForCurrentBusiness(): Promise<
+  | { ok: true; cards: SegmentCardData[] }
+  | { ok: false; error: string }
+> {
+  const list = await listSegmentsForCurrentBusiness();
+  if (!list.ok) return list;
+
+  const cards: SegmentCardData[] = [];
+  for (const segment of list.segments) {
+    const evaluation = await evaluateSegmentMembership(segment.id);
+    cards.push({
+      segment,
+      count: evaluation.ok ? evaluation.matches.length : 0,
+      rulesSummary: summarizeRules(segment.rules_json),
+      error: evaluation.ok ? null : evaluation.error,
+    });
+  }
+
+  return { ok: true, cards };
 }
 
 export async function createSegmentForCurrentBusiness(
@@ -141,13 +248,23 @@ export async function createSegmentForCurrentBusiness(
     name: parsed.data.name,
     description: parsed.data.description,
     rulesJson: parsed.data.rules_json,
+    origin: "manual",
+    sourceKey: null,
   });
 
   if (error || !data) {
     return { ok: false, error: error?.message ?? "No se pudo crear el segmento." };
   }
 
-  return { ok: true, segment: data };
+  return {
+    ok: true,
+    segment: {
+      ...data,
+      origin: data.origin ?? "manual",
+      source_key: data.source_key ?? null,
+      rules_json: data.rules_json,
+    },
+  };
 }
 
 export async function evaluateSegmentMembership(
@@ -194,19 +311,9 @@ export async function evaluateSegmentMembership(
 
   const matches: ContactSegmentMatch[] = [];
 
-  for (const contact of contacts.data ?? []) {
+  for (const contact of (contacts.data ?? []) as ContactForSegment[]) {
     const analysis = latestByContact.get(contact.id);
-    const conversations = Array.isArray(contact.conversations)
-      ? contact.conversations
-      : contact.conversations
-        ? [contact.conversations]
-        : [];
-    const lastMessageAt =
-      conversations
-        .map((item: { last_message_at?: string | null }) => item.last_message_at)
-        .filter(Boolean)
-        .sort()
-        .at(-1) ?? null;
+    const lastMessageAt = getLastMessageAt(contact);
 
     const matched = matchSegmentRules(segment.rules_json, {
       product: analysis?.product ?? null,
@@ -215,6 +322,7 @@ export async function evaluateSegmentMembership(
       contactStatus: contact.status,
       reason: analysis?.reason ?? null,
       segment: analysis?.segment ?? null,
+      tags: extractTags(analysis?.attributes),
       lastMessageAt,
     });
 

@@ -28,6 +28,7 @@ export type SegmentRuleCondition = {
     | "contact_status"
     | "reason"
     | "segment"
+    | "tag"
     | "last_message_within_days";
   op: "eq" | "contains" | "lte" | "gte";
   value: string | number | boolean;
@@ -38,12 +39,16 @@ export type SegmentRules = {
   conditions: SegmentRuleCondition[];
 };
 
+export type SegmentOrigin = "ai" | "system" | "manual";
+
 export type Segment = {
   id: string;
   business_id: string;
   name: string;
   description: string | null;
   rules_json: SegmentRules;
+  origin: SegmentOrigin;
+  source_key: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

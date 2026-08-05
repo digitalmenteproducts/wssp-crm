@@ -35,6 +35,7 @@ export const segmentRuleConditionSchema = z.object({
     "contact_status",
     "reason",
     "segment",
+    "tag",
     "last_message_within_days",
   ]),
   op: z.enum(["eq", "contains", "lte", "gte"]),
@@ -43,7 +44,9 @@ export const segmentRuleConditionSchema = z.object({
 
 export const segmentRulesSchema = z.object({
   operator: z.enum(["and", "or"]).default("and"),
-  conditions: z.array(segmentRuleConditionSchema).default([]),
+  conditions: z
+    .array(segmentRuleConditionSchema)
+    .min(1, "Añade al menos una regla."),
 });
 
 export const createSegmentSchema = z.object({

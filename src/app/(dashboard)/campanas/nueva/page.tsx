@@ -14,7 +14,16 @@ export const metadata: Metadata = {
   title: "Nueva campaña",
 };
 
-export default async function NuevaCampanaPage() {
+type NuevaCampanaPageProps = {
+  searchParams?: Promise<{ segmento?: string }>;
+};
+
+export default async function NuevaCampanaPage({
+  searchParams,
+}: NuevaCampanaPageProps) {
+  const params = searchParams ? await searchParams : {};
+  const defaultSegmentId = params.segmento;
+
   const [templatesResult, segmentsResult] = await Promise.all([
     templatesService.listTemplatesForCurrentBusiness(),
     segmentsService.listSegmentsForCurrentBusiness(),
@@ -45,7 +54,7 @@ export default async function NuevaCampanaPage() {
     <>
       <PageHeader
         title="Nueva campaña"
-        description="Elige un segmento y una plantilla aprobada para enviar por WhatsApp."
+        description="Elige un segmento y una plantilla aprobada. El envío siempre requiere tu confirmación."
         actions={
           <Link
             href={ROUTES.campanas}
@@ -63,7 +72,11 @@ export default async function NuevaCampanaPage() {
         <p className="mb-4 text-sm text-destructive">{segmentsResult.error}</p>
       ) : null}
 
-      <LaunchCampaignForm templates={templates} segments={segments} />
+      <LaunchCampaignForm
+        templates={templates}
+        segments={segments}
+        defaultSegmentId={defaultSegmentId}
+      />
     </>
   );
 }

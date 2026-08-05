@@ -198,6 +198,18 @@ export async function runClassificationBatch(input?: {
     skipped = 0;
   }
 
+  if (succeeded > 0) {
+    const businessIds = new Set(
+      conversations.map((conversation) => conversation.business_id),
+    );
+    const { syncAiSegmentsForBusiness } = await import(
+      "@/services/segmentation/sync-ai-segments.service"
+    );
+    for (const businessId of businessIds) {
+      await syncAiSegmentsForBusiness(businessId);
+    }
+  }
+
   return { processed, succeeded, failed, skipped, errors };
 }
 
