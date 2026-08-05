@@ -112,7 +112,7 @@ cross join (
     (
       'Objeción de precio',
       'No compraron por precio',
-      '{"operator":"and","conditions":[{"field":"reason","op":"contains","value":"precio"}]}'
+      '{"operator":"or","conditions":[{"field":"reason","op":"contains","value":"precio"},{"field":"reason","op":"contains","value":"dinero"},{"field":"reason","op":"contains","value":"plata"},{"field":"reason","op":"contains","value":"presupuesto"},{"field":"tag","op":"contains","value":"precio"},{"field":"tag","op":"contains","value":"dinero"}]}'
     ),
     (
       'Activos 15 días',
