@@ -26,6 +26,14 @@ export type {
 } from "@/types/whatsapp";
 
 export type {
+  AiAnalysisRecord,
+  ContactSegmentMatch,
+  Segment,
+  SegmentRuleCondition,
+  SegmentRules,
+} from "@/types/ai";
+
+export type {
   Business,
   BusinessRole,
   BusinessSettings,
