@@ -29,8 +29,8 @@ export function CreateTemplateForm({ segments }: CreateTemplateFormProps) {
     >
       <h3 className="text-base font-semibold">Crear plantilla</h3>
       <p className="text-xs text-secondary">
-        Borrador local. Usa variables Meta como {"{{1}}"} o {"{{name}}"}. El
-        envío real llega en el Sprint 6.
+        Borrador local. Usa variables Meta como {"{{1}}"} o {"{{name}}"}.
+        Para enviar, sincroniza una plantilla aprobada y usa Nueva Campaña.
       </p>
 
       <div className="grid gap-4 md:grid-cols-2">

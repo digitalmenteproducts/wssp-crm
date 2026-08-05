@@ -15,7 +15,6 @@ import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
 
 import { BrandLogo } from "@/components/layout/brand-logo";
-import { Button } from "@/components/ui/button";
 import { APP_NAME, ROUTES } from "@/config/app";
 import { cn } from "@/lib/utils";
 
@@ -53,15 +52,13 @@ export function AppSidebar() {
         </div>
       </div>
 
-      <Button
-        type="button"
-        disabled
-        title="Las campañas llegan en el Sprint 6"
-        className="mb-6 h-10 w-full justify-center gap-2 rounded-lg border-t border-white/10 bg-primary-container text-sm font-semibold text-on-primary-container hover:bg-primary-container/90 disabled:opacity-60"
+      <Link
+        href={ROUTES.campanasNueva}
+        className="mb-6 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border-t border-white/10 bg-primary-container text-sm font-semibold text-on-primary-container hover:bg-primary-container/90"
       >
         <Plus className="size-4" />
         Nueva Campaña
-      </Button>
+      </Link>
 
       <div className="flex flex-1 flex-col gap-1 overflow-y-auto">
         {PRIMARY_NAV.map((item) => {

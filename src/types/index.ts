@@ -47,6 +47,12 @@ export {
 export type { Template, TemplateStatus } from "@/types/templates";
 
 export type {
+  Campaign,
+  CampaignSend,
+  CampaignStatus,
+} from "@/types/campaigns";
+
+export type {
   Business,
   BusinessRole,
   BusinessSettings,
