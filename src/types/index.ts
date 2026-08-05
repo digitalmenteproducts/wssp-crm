@@ -34,6 +34,17 @@ export type {
 } from "@/types/ai";
 
 export type {
+  ContactBoard,
+  ContactBoardCard,
+  ContactBoardColumn,
+} from "@/types/contacts";
+
+export {
+  CONTACT_BOARD_LABELS,
+  CONTACT_BOARD_STATUSES,
+} from "@/types/contacts";
+
+export type {
   Business,
   BusinessRole,
   BusinessSettings,
