@@ -14,12 +14,15 @@ import {
 } from "@/services/segmentation/segments.service";
 
 const AI_MIN_CONTACTS = 5;
+/** Inactividad: umbral más bajo para detectar conversaciones frías pronto. */
+const AI_SILENT_MIN_CONTACTS = 2;
 
 type ProposedSegment = {
   sourceKey: string;
   name: string;
   description: string;
   rules: SegmentRules;
+  minContacts?: number;
 };
 
 function normalizeToken(value: string): string {
@@ -176,6 +179,56 @@ function proposeAiSegments(
     });
   }
 
+  // Inactividad / "no respondió más"
+  for (const days of [3, 7, 15] as const) {
+    const silentRules: SegmentRules = {
+      operator: "and",
+      conditions: [
+        { field: "last_message_within_days", op: "gte", value: days },
+      ],
+    };
+    const silentCount = countMatchesForRules(
+      silentRules,
+      contacts,
+      latestByContact,
+    );
+    if (silentCount >= AI_SILENT_MIN_CONTACTS) {
+      proposals.push({
+        sourceKey: buildSourceKey(["ai", "silent", `${days}d`]),
+        name: `No respondió más (${days} días)`,
+        description: `Contactos sin mensajes en al menos ${days} días. Segmento dinámico de reactivación.`,
+        rules: silentRules,
+        minContacts: AI_SILENT_MIN_CONTACTS,
+      });
+    }
+
+    for (const status of ["interesado", "no_compro"] as const) {
+      const comboSilent: SegmentRules = {
+        operator: "and",
+        conditions: [
+          { field: "contact_status", op: "eq", value: status },
+          { field: "last_message_within_days", op: "gte", value: days },
+        ],
+      };
+      const comboCount = countMatchesForRules(
+        comboSilent,
+        contacts,
+        latestByContact,
+      );
+      if (comboCount >= AI_SILENT_MIN_CONTACTS) {
+        const statusLabel =
+          status === "no_compro" ? "No compraron" : "Interesados";
+        proposals.push({
+          sourceKey: buildSourceKey(["ai", "silent", status, `${days}d`]),
+          name: `${statusLabel} sin respuesta (${days}d)`,
+          description: `${statusLabel} sin actividad en al menos ${days} días.`,
+          rules: comboSilent,
+          minContacts: AI_SILENT_MIN_CONTACTS,
+        });
+      }
+    }
+  }
+
   return proposals;
 }
 
@@ -234,7 +287,7 @@ export async function syncAiSegmentsForBusiness(
       latestByContact,
     );
 
-    if (matchCount < AI_MIN_CONTACTS) {
+    if (matchCount < (proposal.minContacts ?? AI_MIN_CONTACTS)) {
       skipped += 1;
       continue;
     }

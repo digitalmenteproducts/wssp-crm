@@ -61,6 +61,9 @@ export function summarizeCondition(condition: SegmentRuleCondition): string {
     value = STATUS_LABELS[value] ?? value;
   }
   if (condition.field === "last_message_within_days") {
+    if (condition.op === "gte") {
+      return `Sin actividad ≥ ${value} días`;
+    }
     return `${field} últimos ${value} días`;
   }
 
