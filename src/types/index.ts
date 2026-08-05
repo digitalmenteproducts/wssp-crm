@@ -44,6 +44,8 @@ export {
   CONTACT_BOARD_STATUSES,
 } from "@/types/contacts";
 
+export type { Template, TemplateStatus } from "@/types/templates";
+
 export type {
   Business,
   BusinessRole,
