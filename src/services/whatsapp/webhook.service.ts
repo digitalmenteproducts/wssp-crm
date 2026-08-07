@@ -84,14 +84,28 @@ export async function verifyWebhookSubscription(input: {
   return { ok: true, challenge: input.challenge };
 }
 
+function isProductionRuntime(): boolean {
+  return (
+    process.env.NODE_ENV === "production" ||
+    process.env.VERCEL_ENV === "production"
+  );
+}
+
 export function validateMetaSignature(input: {
   rawBody: string;
   signatureHeader: string | null;
 }): { ok: true } | { ok: false; status: number; error: string } {
   const appSecret = getOptionalServerEnv().META_APP_SECRET;
 
-  // Sin secret configurado permitimos el ingest (piloto).
   if (!appSecret) {
+    if (isProductionRuntime()) {
+      return {
+        ok: false,
+        status: 500,
+        error: "META_APP_SECRET no configurado en producción.",
+      };
+    }
+    // Solo desarrollo/local: permite ingest sin firma.
     return { ok: true };
   }
 
