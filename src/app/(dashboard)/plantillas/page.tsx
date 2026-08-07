@@ -30,24 +30,21 @@ export default async function PlantillasPage() {
     <>
       <PageHeader
         title="Biblioteca de Plantillas"
-        description="Gestiona plantillas de WhatsApp, asígnalas a segmentos y sincronízalas desde Meta."
+        description="Crea plantillas manualmente, envíalas a Meta para revisión y sincroniza su estado. Meta es quien aprueba."
         actions={<SyncTemplatesButton />}
       />
+
+      <div className="mb-6">
+        <CreateTemplateForm segments={segments} />
+      </div>
 
       {!templatesResult.ok ? (
         <div className="mb-6 rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
           {templatesResult.error}
         </div>
       ) : (
-        <TemplatesLibrary
-          templates={templatesResult.templates}
-          segments={segments}
-        />
+        <TemplatesLibrary templates={templatesResult.templates} />
       )}
-
-      <div className="mt-8">
-        <CreateTemplateForm segments={segments} />
-      </div>
     </>
   );
 }

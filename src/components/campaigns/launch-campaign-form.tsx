@@ -13,7 +13,13 @@ import { Label } from "@/components/ui/label";
 const initialState: CampaignFormState = {};
 
 type LaunchCampaignFormProps = {
-  templates: Array<{ id: string; name: string; status: string; language: string }>;
+  templates: Array<{
+    id: string;
+    name: string;
+    display_name: string;
+    status: string;
+    language: string;
+  }>;
   segments: Array<{ id: string; name: string; count: number }>;
   defaultSegmentId?: string;
 };
@@ -90,7 +96,7 @@ export function LaunchCampaignForm({
           </option>
           {approved.map((template) => (
             <option key={template.id} value={template.id}>
-              {template.name} · {template.language}
+              {template.display_name} · {template.language}
             </option>
           ))}
         </select>

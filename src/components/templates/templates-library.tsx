@@ -7,13 +7,9 @@ import type { Template } from "@/types/templates";
 
 type TemplatesLibraryProps = {
   templates: Template[];
-  segments: Array<{ id: string; name: string }>;
 };
 
-export function TemplatesLibrary({
-  templates,
-  segments,
-}: TemplatesLibraryProps) {
+export function TemplatesLibrary({ templates }: TemplatesLibraryProps) {
   const categories = useMemo(() => {
     const set = new Set(templates.map((item) => item.category));
     return Array.from(set).sort();
@@ -62,11 +58,7 @@ export function TemplatesLibrary({
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {visible.map((template) => (
-            <TemplateCard
-              key={template.id}
-              template={template}
-              segments={segments}
-            />
+            <TemplateCard key={template.id} template={template} />
           ))}
         </div>
       )}

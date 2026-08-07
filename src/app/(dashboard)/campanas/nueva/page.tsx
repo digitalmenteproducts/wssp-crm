@@ -33,6 +33,7 @@ export default async function NuevaCampanaPage({
     ? templatesResult.templates.map((template) => ({
         id: template.id,
         name: template.name,
+        display_name: template.display_name,
         status: template.status,
         language: template.language,
       }))

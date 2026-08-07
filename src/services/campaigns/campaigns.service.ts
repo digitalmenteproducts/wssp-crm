@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/repositories/auth.repository";
 import * as businessRepository from "@/repositories/business.repository";
 import * as campaignsRepository from "@/repositories/campaigns.repository";
 import * as whatsappRepository from "@/repositories/whatsapp.repository";
+import { mapTemplateRow } from "@/repositories/templates.repository";
 import * as businessService from "@/services/business/business.service";
 import { evaluateSegmentMembership } from "@/services/segmentation/segments.service";
 import { previewTemplateContent } from "@/lib/templates/preview";
@@ -33,35 +34,10 @@ function buildBodyParameters(
     "3": "10%",
     name: contact.name?.trim() || "cliente",
     product: contact.product?.trim() || "tu pedido",
+    ...template.variable_examples,
   };
 
   return template.variables.map((variable) => sample[variable] ?? "cliente");
-}
-
-function mapTemplateRow(row: Record<string, unknown>): Template {
-  const variables = Array.isArray(row.variables)
-    ? row.variables.filter((item): item is string => typeof item === "string")
-    : [];
-
-  return {
-    id: String(row.id),
-    business_id: String(row.business_id),
-    meta_template_id:
-      row.meta_template_id == null ? null : String(row.meta_template_id),
-    name: String(row.name),
-    category: String(row.category),
-    language: String(row.language),
-    content: String(row.content ?? ""),
-    variables,
-    segment_id: row.segment_id == null ? null : String(row.segment_id),
-    status: row.status as Template["status"],
-    meta_raw:
-      row.meta_raw && typeof row.meta_raw === "object"
-        ? (row.meta_raw as Record<string, unknown>)
-        : {},
-    created_at: String(row.created_at),
-    updated_at: String(row.updated_at),
-  };
 }
 
 async function ensureConversation(input: {

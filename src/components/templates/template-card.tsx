@@ -1,17 +1,17 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Eye, MoreVertical, Pencil, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { MoreVertical } from "lucide-react";
 
 import {
-  assignTemplateSegmentAction,
   deleteTemplateAction,
-  updateTemplateAction,
+  duplicateTemplateAction,
+  submitTemplateAction,
   type TemplateFormState,
 } from "@/app/(dashboard)/actions/sprint5";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { ROUTES } from "@/config/app";
 import { previewTemplateContent } from "@/lib/templates/preview";
 import type { Template } from "@/types/templates";
 
@@ -19,44 +19,59 @@ const initialState: TemplateFormState = {};
 
 const STATUS_LABEL: Record<string, string> = {
   draft: "Borrador",
-  pending: "Pendiente",
+  submitting: "Enviando…",
+  pending: "En revisión",
   approved: "Aprobada",
   rejected: "Rechazada",
   paused: "Pausada",
   disabled: "Deshabilitada",
+  error: "Error",
+};
+
+const STATUS_CLASS: Record<string, string> = {
+  draft: "bg-slate-100 text-slate-700",
+  submitting: "bg-sky-100 text-sky-800",
+  pending: "bg-amber-100 text-amber-900",
+  approved: "bg-emerald-100 text-emerald-800",
+  rejected: "bg-red-100 text-red-800",
+  paused: "bg-orange-100 text-orange-900",
+  disabled: "bg-slate-200 text-slate-600",
+  error: "bg-red-100 text-red-800",
 };
 
 type TemplateCardProps = {
   template: Template;
-  segments: Array<{ id: string; name: string }>;
 };
 
-export function TemplateCard({ template, segments }: TemplateCardProps) {
+export function TemplateCard({ template }: TemplateCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [mode, setMode] = useState<"view" | "edit" | "preview">("view");
   const [deleteState, deleteAction, deletePending] = useActionState(
     deleteTemplateAction,
     initialState,
   );
-  const [updateState, updateAction, updatePending] = useActionState(
-    updateTemplateAction,
+  const [submitState, submitAction, submitPending] = useActionState(
+    submitTemplateAction,
     initialState,
   );
-  const [assignState, assignAction, assignPending] = useActionState(
-    assignTemplateSegmentAction,
+  const [dupState, dupAction, dupPending] = useActionState(
+    duplicateTemplateAction,
     initialState,
   );
 
   const feedback =
     deleteState.error ||
     deleteState.message ||
-    updateState.error ||
-    updateState.message ||
-    assignState.error ||
-    assignState.message;
-
+    submitState.error ||
+    submitState.message ||
+    dupState.error ||
+    dupState.message;
   const feedbackIsError = Boolean(
-    deleteState.error || updateState.error || assignState.error,
+    deleteState.error || submitState.error || dupState.error,
+  );
+
+  const preview = previewTemplateContent(
+    template.content,
+    template.variable_examples,
   );
 
   return (
@@ -66,7 +81,9 @@ export function TemplateCard({ template, segments }: TemplateCardProps) {
           <span className="rounded bg-muted px-2.5 py-0.5 font-mono text-[10px] tracking-wider text-secondary uppercase">
             {template.category}
           </span>
-          <span className="rounded bg-primary/10 px-2.5 py-0.5 text-[10px] font-semibold text-primary">
+          <span
+            className={`rounded px-2.5 py-0.5 text-[10px] font-semibold ${STATUS_CLASS[template.status] ?? "bg-muted text-secondary"}`}
+          >
             {STATUS_LABEL[template.status] ?? template.status}
           </span>
         </div>
@@ -80,175 +97,104 @@ export function TemplateCard({ template, segments }: TemplateCardProps) {
             <MoreVertical className="size-5" />
           </button>
           {menuOpen ? (
-            <div className="absolute right-0 z-10 mt-1 w-40 rounded-md border border-outline-variant bg-card p-1 shadow-md">
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
-                onClick={() => {
-                  setMode("preview");
-                  setMenuOpen(false);
-                }}
-              >
-                <Eye className="size-3.5" />
-                Previsualizar
-              </button>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
-                onClick={() => {
-                  setMode("edit");
-                  setMenuOpen(false);
-                }}
-              >
-                <Pencil className="size-3.5" />
-                Editar
-              </button>
-              <form action={deleteAction}>
-                <input type="hidden" name="id" value={template.id} />
-                <button
-                  type="submit"
-                  disabled={deletePending}
-                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-destructive hover:bg-muted"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  <Trash2 className="size-3.5" />
-                  Eliminar
-                </button>
-              </form>
+            <div className="absolute right-0 z-10 mt-1 w-48 rounded-md border border-outline-variant bg-card p-1 shadow-md">
+              {(template.status === "draft" ||
+                template.status === "rejected" ||
+                template.status === "error") && (
+                <form action={submitAction}>
+                  <input type="hidden" name="id" value={template.id} />
+                  <button
+                    type="submit"
+                    disabled={submitPending}
+                    className="w-full rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Enviar para revisión
+                  </button>
+                </form>
+              )}
+              {(template.status === "approved" ||
+                template.status === "rejected") && (
+                <form action={dupAction}>
+                  <input type="hidden" name="id" value={template.id} />
+                  <button
+                    type="submit"
+                    disabled={dupPending}
+                    className="w-full rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Duplicar
+                    {template.status === "rejected" ? " y corregir" : ""}
+                  </button>
+                </form>
+              )}
+              {template.status !== "pending" &&
+              template.status !== "submitting" ? (
+                <form action={deleteAction}>
+                  <input type="hidden" name="id" value={template.id} />
+                  <button
+                    type="submit"
+                    disabled={deletePending}
+                    className="w-full rounded px-2 py-1.5 text-left text-xs text-destructive hover:bg-muted"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    Eliminar
+                  </button>
+                </form>
+              ) : null}
             </div>
           ) : null}
         </div>
       </div>
 
-      <h3 className="mb-1 text-lg font-semibold">{template.name}</h3>
+      <h3 className="mb-0.5 text-lg font-semibold">{template.display_name}</h3>
       <p className="mb-3 font-mono text-[11px] text-secondary">
-        {template.language}
-        {template.segment?.name ? ` · ${template.segment.name}` : ""}
+        {template.name} · {template.language}
+        {template.last_synced_at
+          ? ` · sync ${new Date(template.last_synced_at).toLocaleString("es")}`
+          : ""}
       </p>
 
-      {mode === "preview" ? (
-        <div className="mb-4 flex-1 rounded-lg border border-outline-variant/40 bg-muted/40 p-3 text-sm text-secondary">
-          <p className="mb-2 font-mono text-[10px] tracking-wider uppercase">
-            Preview
-          </p>
-          {previewTemplateContent(template.content)}
-          <button
-            type="button"
-            className="mt-3 text-xs text-primary hover:underline"
-            onClick={() => setMode("view")}
-          >
-            Cerrar preview
-          </button>
-        </div>
-      ) : mode === "edit" ? (
-        <form action={updateAction} className="mb-4 space-y-3">
-          <input type="hidden" name="id" value={template.id} />
-          <div className="space-y-1">
-            <Label className="font-mono text-[10px] uppercase">Nombre</Label>
-            <Input
-              name="name"
-              defaultValue={template.name}
-              className="h-9 font-mono text-sm"
-              required
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <Label className="font-mono text-[10px] uppercase">Categoría</Label>
-              <Input
-                name="category"
-                defaultValue={template.category}
-                className="h-9"
-                required
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="font-mono text-[10px] uppercase">Idioma</Label>
-              <Input
-                name="language"
-                defaultValue={template.language}
-                className="h-9"
-                required
-              />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <Label className="font-mono text-[10px] uppercase">Contenido</Label>
-            <textarea
-              name="content"
-              defaultValue={template.content}
-              rows={4}
-              required
-              className="w-full rounded-md border border-outline-variant bg-background px-3 py-2 text-sm"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label className="font-mono text-[10px] uppercase">Segmento</Label>
-            <select
-              name="segment_id"
-              defaultValue={template.segment_id ?? ""}
-              className="h-9 w-full rounded-md border border-outline-variant bg-background px-3 text-sm"
-            >
-              <option value="">Sin segmento</option>
-              {segments.map((segment) => (
-                <option key={segment.id} value={segment.id}>
-                  {segment.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex gap-2">
+      {template.header_text ? (
+        <p className="mb-1 text-sm font-semibold">{template.header_text}</p>
+      ) : null}
+      <div className="mb-4 flex-1 rounded-lg border border-outline-variant/40 bg-muted/40 p-3 text-sm text-secondary line-clamp-4">
+        {preview}
+      </div>
+      {template.footer_text ? (
+        <p className="mb-3 text-xs text-secondary">{template.footer_text}</p>
+      ) : null}
+
+      {template.status === "rejected" || template.status === "error" ? (
+        <p className="mb-3 rounded-md bg-destructive/10 px-2 py-1.5 text-xs text-destructive">
+          {template.rejection_reason ?? "Rechazada por Meta. Revisa y duplica para corregir."}
+        </p>
+      ) : null}
+
+      <div className="mt-auto flex flex-wrap gap-2">
+        {(template.status === "draft" ||
+          template.status === "rejected" ||
+          template.status === "error") && (
+          <form action={submitAction}>
+            <input type="hidden" name="id" value={template.id} />
             <Button
               type="submit"
-              disabled={updatePending}
+              disabled={submitPending}
               className="h-8 bg-primary text-primary-foreground"
             >
-              {updatePending ? "Guardando…" : "Guardar"}
+              {submitPending ? "Enviando…" : "Enviar para revisión"}
             </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-8"
-              onClick={() => setMode("view")}
-            >
-              Cancelar
-            </Button>
-          </div>
-        </form>
-      ) : (
-        <div className="mb-4 flex-1 rounded-lg border border-outline-variant/40 bg-muted/40 p-3 text-sm text-secondary line-clamp-4">
-          {template.content}
-        </div>
-      )}
-
-      {mode === "view" ? (
-        <form
-          action={assignAction}
-          className="mt-auto flex items-center gap-2 border-t border-outline-variant/40 pt-3"
-        >
-          <input type="hidden" name="id" value={template.id} />
-          <select
-            name="segment_id"
-            defaultValue={template.segment_id ?? ""}
-            className="h-8 flex-1 rounded-md border border-outline-variant bg-background px-2 text-xs"
+          </form>
+        )}
+        {template.status === "approved" ? (
+          <Link
+            href={ROUTES.campanasNueva}
+            className="inline-flex h-8 items-center rounded-md bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary-container"
           >
-            <option value="">Sin segmento</option>
-            {segments.map((segment) => (
-              <option key={segment.id} value={segment.id}>
-                {segment.name}
-              </option>
-            ))}
-          </select>
-          <Button
-            type="submit"
-            variant="outline"
-            disabled={assignPending}
-            className="h-8 text-xs"
-          >
-            Asignar
-          </Button>
-        </form>
-      ) : null}
+            Usar en campaña
+          </Link>
+        ) : null}
+      </div>
 
       {feedback ? (
         <p
@@ -256,12 +202,6 @@ export function TemplateCard({ template, segments }: TemplateCardProps) {
           role={feedbackIsError ? "alert" : "status"}
         >
           {feedback}
-        </p>
-      ) : null}
-
-      {template.variables.length > 0 && mode === "view" ? (
-        <p className="mt-2 font-mono text-[10px] text-secondary">
-          Vars: {template.variables.map((v) => `{{${v}}}`).join(" ")}
         </p>
       ) : null}
     </article>
