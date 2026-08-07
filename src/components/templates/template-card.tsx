@@ -10,6 +10,7 @@ import {
   submitTemplateAction,
   type TemplateFormState,
 } from "@/app/(dashboard)/actions/sprint5";
+import { CreateTemplateForm } from "@/components/templates/create-template-form";
 import { Button } from "@/components/ui/button";
 import { ROUTES } from "@/config/app";
 import { previewTemplateContent } from "@/lib/templates/preview";
@@ -41,10 +42,12 @@ const STATUS_CLASS: Record<string, string> = {
 
 type TemplateCardProps = {
   template: Template;
+  segments: Array<{ id: string; name: string }>;
 };
 
-export function TemplateCard({ template }: TemplateCardProps) {
+export function TemplateCard({ template, segments }: TemplateCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [deleteState, deleteAction, deletePending] = useActionState(
     deleteTemplateAction,
     initialState,
@@ -74,6 +77,21 @@ export function TemplateCard({ template }: TemplateCardProps) {
     template.variable_examples,
   );
 
+  const canEdit =
+    template.status === "draft" ||
+    template.status === "rejected" ||
+    template.status === "error";
+
+  if (editing && canEdit) {
+    return (
+      <CreateTemplateForm
+        segments={segments}
+        template={template}
+        onCancel={() => setEditing(false)}
+      />
+    );
+  }
+
   return (
     <article className="relative flex flex-col overflow-hidden rounded-xl border border-outline-variant/50 bg-card p-5">
       <div className="mb-4 flex items-start justify-between gap-2">
@@ -98,9 +116,19 @@ export function TemplateCard({ template }: TemplateCardProps) {
           </button>
           {menuOpen ? (
             <div className="absolute right-0 z-10 mt-1 w-48 rounded-md border border-outline-variant bg-card p-1 shadow-md">
-              {(template.status === "draft" ||
-                template.status === "rejected" ||
-                template.status === "error") && (
+              {canEdit ? (
+                <button
+                  type="button"
+                  className="w-full rounded px-2 py-1.5 text-left text-xs hover:bg-muted"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setEditing(true);
+                  }}
+                >
+                  Editar
+                </button>
+              ) : null}
+              {canEdit ? (
                 <form action={submitAction}>
                   <input type="hidden" name="id" value={template.id} />
                   <button
@@ -112,7 +140,7 @@ export function TemplateCard({ template }: TemplateCardProps) {
                     Enviar para revisión
                   </button>
                 </form>
-              )}
+              ) : null}
               {(template.status === "approved" ||
                 template.status === "rejected") && (
                 <form action={dupAction}>
@@ -172,9 +200,17 @@ export function TemplateCard({ template }: TemplateCardProps) {
       ) : null}
 
       <div className="mt-auto flex flex-wrap gap-2">
-        {(template.status === "draft" ||
-          template.status === "rejected" ||
-          template.status === "error") && (
+        {canEdit ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-8"
+            onClick={() => setEditing(true)}
+          >
+            Editar
+          </Button>
+        ) : null}
+        {canEdit ? (
           <form action={submitAction}>
             <input type="hidden" name="id" value={template.id} />
             <Button
@@ -185,7 +221,7 @@ export function TemplateCard({ template }: TemplateCardProps) {
               {submitPending ? "Enviando…" : "Enviar para revisión"}
             </Button>
           </form>
-        )}
+        ) : null}
         {template.status === "approved" ? (
           <Link
             href={ROUTES.campanasNueva}

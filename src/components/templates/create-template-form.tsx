@@ -1,35 +1,52 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useRef, useState } from "react";
 
 import {
   createTemplateAction,
+  updateTemplateAction,
   type TemplateFormState,
 } from "@/app/(dashboard)/actions/sprint5";
+import { TemplateVariablesHint } from "@/components/templates/template-variables-hint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getCrmVariableMeta } from "@/lib/templates/crm-variables";
 import { previewTemplateContent } from "@/lib/templates/preview";
 import { slugifyTemplateName } from "@/lib/templates/slug";
-import type { TemplateButton } from "@/types/templates";
+import type { Template, TemplateButton } from "@/types/templates";
 
 const initialState: TemplateFormState = {};
 
 type CreateTemplateFormProps = {
   segments: Array<{ id: string; name: string }>;
+  template?: Template;
+  onCancel?: () => void;
 };
 
-export function CreateTemplateForm({ segments }: CreateTemplateFormProps) {
-  const [open, setOpen] = useState(false);
-  const [displayName, setDisplayName] = useState("");
-  const [name, setName] = useState("");
-  const [header, setHeader] = useState("");
-  const [content, setContent] = useState("");
-  const [footer, setFooter] = useState("");
-  const [examples, setExamples] = useState<Record<string, string>>({});
-  const [buttons, setButtons] = useState<TemplateButton[]>([]);
+export function CreateTemplateForm({
+  segments,
+  template,
+  onCancel,
+}: CreateTemplateFormProps) {
+  const isEdit = Boolean(template);
+  const [open, setOpen] = useState(isEdit);
+  const [displayName, setDisplayName] = useState(
+    template?.display_name ?? "",
+  );
+  const [name, setName] = useState(template?.name ?? "");
+  const [header, setHeader] = useState(template?.header_text ?? "");
+  const [content, setContent] = useState(template?.content ?? "");
+  const [footer, setFooter] = useState(template?.footer_text ?? "");
+  const [examples, setExamples] = useState<Record<string, string>>(
+    template?.variable_examples ?? {},
+  );
+  const [buttons, setButtons] = useState<TemplateButton[]>(
+    template?.buttons ?? [],
+  );
+  const contentRef = useRef<HTMLTextAreaElement>(null);
   const [state, formAction, pending] = useActionState(
-    createTemplateAction,
+    isEdit ? updateTemplateAction : createTemplateAction,
     initialState,
   );
 
@@ -44,6 +61,33 @@ export function CreateTemplateForm({ segments }: CreateTemplateFormProps) {
     () => previewTemplateContent(content, examples),
     [content, examples],
   );
+
+  function insertVariable(token: string) {
+    const textarea = contentRef.current;
+    if (!textarea) {
+      setContent((prev) => `${prev}${token}`);
+      return;
+    }
+
+    const start = textarea.selectionStart ?? content.length;
+    const end = textarea.selectionEnd ?? content.length;
+    const next = `${content.slice(0, start)}${token}${content.slice(end)}`;
+    setContent(next);
+
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const caret = start + token.length;
+      textarea.setSelectionRange(caret, caret);
+    });
+  }
+
+  function handleClose() {
+    if (onCancel) {
+      onCancel();
+      return;
+    }
+    setOpen(false);
+  }
 
   if (!open) {
     return (
@@ -62,17 +106,23 @@ export function CreateTemplateForm({ segments }: CreateTemplateFormProps) {
       action={formAction}
       className="space-y-4 rounded-xl border border-outline-variant/50 bg-card p-5"
     >
+      {isEdit ? <input type="hidden" name="id" value={template!.id} /> : null}
+
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h3 className="text-base font-semibold">Nueva plantilla</h3>
+          <h3 className="text-base font-semibold">
+            {isEdit ? "Editar plantilla" : "Nueva plantilla"}
+          </h3>
           <p className="text-xs text-secondary">
-            Se guarda como borrador. Luego puedes enviarla a Meta para revisión.
+            {isEdit
+              ? "Guarda los cambios y luego envíala a Meta para revisión."
+              : "Se guarda como borrador. Luego puedes enviarla a Meta para revisión."}
           </p>
         </div>
         <button
           type="button"
           className="text-xs text-secondary hover:text-primary"
-          onClick={() => setOpen(false)}
+          onClick={handleClose}
         >
           Cerrar
         </button>
@@ -95,7 +145,9 @@ export function CreateTemplateForm({ segments }: CreateTemplateFormProps) {
             onChange={(event) => {
               const value = event.target.value;
               setDisplayName(value);
-              setName(slugifyTemplateName(value));
+              if (!isEdit || !template?.name) {
+                setName(slugifyTemplateName(value));
+              }
             }}
             placeholder="Promoción Pizza Viernes"
             className="h-10"
@@ -117,22 +169,22 @@ export function CreateTemplateForm({ segments }: CreateTemplateFormProps) {
           <Label className="font-mono text-xs uppercase">Categoría</Label>
           <select
             name="category"
-            defaultValue="MARKETING"
+            defaultValue={template?.category ?? "MARKETING"}
             className="h-10 w-full rounded-md border border-outline-variant bg-card px-3 text-sm"
           >
             <option value="MARKETING">Marketing</option>
-            <option value="UTILITY">Utility</option>
+            <option value="UTILITY">Utilidad</option>
           </select>
         </div>
         <div className="space-y-1.5">
           <Label className="font-mono text-xs uppercase">Idioma</Label>
           <select
             name="language"
-            defaultValue="es"
+            defaultValue={template?.language ?? "es"}
             className="h-10 w-full rounded-md border border-outline-variant bg-card px-3 text-sm"
           >
             <option value="es">Español (es)</option>
-            <option value="en_US">Inglés (en_US)</option>
+            <option value="en_US">English (en_US)</option>
           </select>
         </div>
         <div className="space-y-1.5 md:col-span-2">
@@ -149,14 +201,16 @@ export function CreateTemplateForm({ segments }: CreateTemplateFormProps) {
         </div>
         <div className="space-y-1.5 md:col-span-2">
           <Label className="font-mono text-xs uppercase">Cuerpo</Label>
+          <TemplateVariablesHint onInsert={insertVariable} />
           <textarea
+            ref={contentRef}
             name="content"
             required
             rows={4}
             value={content}
             onChange={(event) => setContent(event.target.value)}
-            placeholder="Hola {{1}}, hoy tenemos 20% de descuento en pizzas familiares."
-            className="w-full rounded-md border border-outline-variant bg-card px-3 py-2 text-sm"
+            placeholder="Hola {{1}}, hoy tenemos {{3}} de descuento en {{2}}."
+            className="mt-2 w-full rounded-md border border-outline-variant bg-card px-3 py-2 text-sm"
           />
         </div>
         <div className="space-y-1.5 md:col-span-2">
@@ -175,7 +229,7 @@ export function CreateTemplateForm({ segments }: CreateTemplateFormProps) {
           </Label>
           <select
             name="segment_id"
-            defaultValue=""
+            defaultValue={template?.segment_id ?? ""}
             className="h-10 w-full rounded-md border border-outline-variant bg-card px-3 text-sm"
           >
             <option value="">Sin segmento</option>
@@ -191,28 +245,32 @@ export function CreateTemplateForm({ segments }: CreateTemplateFormProps) {
       {variables.length > 0 ? (
         <div className="space-y-2 rounded-lg border border-outline-variant/40 p-3">
           <p className="font-mono text-xs tracking-wider text-secondary uppercase">
-            Ejemplos de variables
+            Ejemplos de variables (requeridos por Meta)
           </p>
           <div className="grid gap-2 md:grid-cols-3">
-            {variables.map((variable) => (
-              <div key={variable} className="space-y-1">
-                <Label className="font-mono text-[10px] uppercase">
-                  {`{{${variable}}}`}
-                </Label>
-                <Input
-                  value={examples[variable] ?? ""}
-                  onChange={(event) =>
-                    setExamples({
-                      ...examples,
-                      [variable]: event.target.value,
-                    })
-                  }
-                  placeholder={variable === "1" ? "Kristian" : "20%"}
-                  className="h-9"
-                  required
-                />
-              </div>
-            ))}
+            {variables.map((variable) => {
+              const meta = getCrmVariableMeta(variable);
+              return (
+                <div key={variable} className="space-y-1">
+                  <Label className="font-mono text-[10px] uppercase">
+                    {`{{${variable}}}`}
+                    {meta ? ` · ${meta.label}` : ""}
+                  </Label>
+                  <Input
+                    value={examples[variable] ?? ""}
+                    onChange={(event) =>
+                      setExamples({
+                        ...examples,
+                        [variable]: event.target.value,
+                      })
+                    }
+                    placeholder={meta?.example ?? "Ejemplo"}
+                    className="h-9"
+                    required
+                  />
+                </div>
+              );
+            })}
           </div>
         </div>
       ) : null}
@@ -333,7 +391,11 @@ export function CreateTemplateForm({ segments }: CreateTemplateFormProps) {
         disabled={pending}
         className="h-9 bg-primary text-primary-foreground hover:bg-primary-container"
       >
-        {pending ? "Guardando…" : "Guardar borrador"}
+        {pending
+          ? "Guardando…"
+          : isEdit
+            ? "Guardar cambios"
+            : "Guardar borrador"}
       </Button>
     </form>
   );

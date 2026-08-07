@@ -9,6 +9,7 @@ import * as whatsappRepository from "@/repositories/whatsapp.repository";
 import { mapTemplateRow } from "@/repositories/templates.repository";
 import * as businessService from "@/services/business/business.service";
 import { evaluateSegmentMembership } from "@/services/segmentation/segments.service";
+import { buildCrmVariableValues } from "@/lib/templates/crm-variables";
 import { previewTemplateContent } from "@/lib/templates/preview";
 import { sendWhatsAppTemplateMessage } from "@/services/whatsapp/send-template.service";
 import type { Campaign } from "@/types/campaigns";
@@ -28,14 +29,17 @@ function buildBodyParameters(
     return [];
   }
 
+  const crm = buildCrmVariableValues(contact);
   const sample: Record<string, string> = {
-    "1": contact.name?.trim() || "cliente",
-    "2": contact.product?.trim() || "tu pedido",
-    "3": "10%",
-    name: contact.name?.trim() || "cliente",
-    product: contact.product?.trim() || "tu pedido",
     ...template.variable_examples,
+    "1": crm["1"],
+    "2": crm["2"],
+    name: crm.name,
+    product: crm.product,
   };
+  if (!sample["3"]?.trim()) {
+    sample["3"] = crm["3"];
+  }
 
   return template.variables.map((variable) => sample[variable] ?? "cliente");
 }

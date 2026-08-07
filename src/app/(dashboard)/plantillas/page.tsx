@@ -43,7 +43,10 @@ export default async function PlantillasPage() {
           {templatesResult.error}
         </div>
       ) : (
-        <TemplatesLibrary templates={templatesResult.templates} />
+        <TemplatesLibrary
+          templates={templatesResult.templates}
+          segments={segments}
+        />
       )}
     </>
   );

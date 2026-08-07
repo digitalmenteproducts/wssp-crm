@@ -1,14 +1,14 @@
+import { CRM_TEMPLATE_VARIABLES } from "@/lib/templates/crm-variables";
+
 export function previewTemplateContent(
   content: string,
   sampleValues?: Record<string, string>,
 ): string {
-  const defaults: Record<string, string> = {
-    "1": "María",
-    "2": "Pizza Margarita",
-    "3": "15%",
-    name: "María",
-    product: "Pizza Margarita",
-  };
+  const defaults: Record<string, string> = Object.fromEntries(
+    CRM_TEMPLATE_VARIABLES.map((item) => [item.key, item.example]),
+  );
+  defaults.name = defaults["1"] ?? "María";
+  defaults.product = defaults["2"] ?? "Pizza Margarita";
 
   const values = { ...defaults, ...sampleValues };
 
