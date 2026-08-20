@@ -19,10 +19,20 @@ const TABS: { id: SettingsTab; label: string }[] = [
 type SettingsTabsProps = {
   workspace: BusinessWorkspace;
   webhookUrl: string;
+  initialTab?: SettingsTab;
+  oauthFeedback?: {
+    status: string | null;
+    reason: string | null;
+  };
 };
 
-export function SettingsTabs({ workspace, webhookUrl }: SettingsTabsProps) {
-  const [tab, setTab] = useState<SettingsTab>("general");
+export function SettingsTabs({
+  workspace,
+  webhookUrl,
+  initialTab = "general",
+  oauthFeedback,
+}: SettingsTabsProps) {
+  const [tab, setTab] = useState<SettingsTab>(initialTab);
   const connected = workspace.settings.whatsapp_connected;
 
   return (
@@ -122,6 +132,7 @@ export function SettingsTabs({ workspace, webhookUrl }: SettingsTabsProps) {
           <IntegrationsSettingsForm
             settings={workspace.settings}
             webhookUrl={webhookUrl}
+            oauthFeedback={oauthFeedback}
           />
         </div>
       ) : null}

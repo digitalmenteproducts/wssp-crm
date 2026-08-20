@@ -10,12 +10,32 @@ export const metadata: Metadata = {
   title: "Configuración",
 };
 
-export default async function ConfiguracionPage() {
+type ConfiguracionPageProps = {
+  searchParams: Promise<{
+    tab?: string;
+    whatsapp?: string;
+    reason?: string;
+  }>;
+};
+
+export default async function ConfiguracionPage({
+  searchParams,
+}: ConfiguracionPageProps) {
+  const params = await searchParams;
   const result = await businessService.getCurrentWorkspace();
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ??
     "http://localhost:3000";
   const webhookUrl = `${appUrl}/api/webhooks/whatsapp`;
+
+  const initialTab =
+    params.tab === "integraciones" ||
+    params.tab === "ia" ||
+    params.tab === "general"
+      ? params.tab
+      : params.whatsapp
+        ? "integraciones"
+        : "general";
 
   return (
     <>
@@ -38,7 +58,15 @@ export default async function ConfiguracionPage() {
           </p>
         </div>
       ) : (
-        <SettingsTabs workspace={result.workspace} webhookUrl={webhookUrl} />
+        <SettingsTabs
+          workspace={result.workspace}
+          webhookUrl={webhookUrl}
+          initialTab={initialTab}
+          oauthFeedback={{
+            status: params.whatsapp ?? null,
+            reason: params.reason ?? null,
+          }}
+        />
       )}
     </>
   );

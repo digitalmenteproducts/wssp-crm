@@ -25,6 +25,8 @@ const optionalServerEnvSchema = z.object({
   WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().min(1).optional(),
   WHATSAPP_VERIFY_TOKEN: z.string().min(1).optional(),
   META_APP_SECRET: z.string().min(1).optional(),
+  META_APP_ID: z.string().min(1).optional(),
+  META_LOGIN_CONFIG_ID: z.string().min(1).optional(),
   CRON_SECRET: z.string().min(1).optional(),
 });
 
@@ -80,6 +82,8 @@ export function getOptionalServerEnv(): OptionalServerEnv {
     WHATSAPP_BUSINESS_ACCOUNT_ID: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID,
     WHATSAPP_VERIFY_TOKEN: process.env.WHATSAPP_VERIFY_TOKEN,
     META_APP_SECRET: process.env.META_APP_SECRET,
+    META_APP_ID: process.env.META_APP_ID,
+    META_LOGIN_CONFIG_ID: process.env.META_LOGIN_CONFIG_ID,
     CRON_SECRET: process.env.CRON_SECRET,
   });
 

@@ -26,6 +26,7 @@ function formatZodIssues(error: { issues: { message: string }[] }): string {
 function toPublicSettings(settings: BusinessSettings): BusinessSettingsPublic {
   const token = settings.whatsapp_access_token;
   const phoneId = settings.whatsapp_phone_number_id;
+  const status = settings.whatsapp_connection_status ?? "disconnected";
 
   return {
     business_id: settings.business_id,
@@ -37,9 +38,13 @@ function toPublicSettings(settings: BusinessSettings): BusinessSettingsPublic {
     whatsapp_business_account_id: settings.whatsapp_business_account_id,
     whatsapp_verify_token_set: Boolean(settings.whatsapp_verify_token),
     whatsapp_verify_token_hint: maskSecret(settings.whatsapp_verify_token),
+    whatsapp_token_expires_at: settings.whatsapp_token_expires_at ?? null,
+    whatsapp_connection_status: status,
+    whatsapp_connected_at: settings.whatsapp_connected_at ?? null,
     classification_prompt: settings.classification_prompt,
     ai_engine_enabled: settings.ai_engine_enabled,
-    whatsapp_connected: Boolean(token && phoneId),
+    whatsapp_connected:
+      status === "connected" || Boolean(token && phoneId),
     updated_at: settings.updated_at,
   };
 }

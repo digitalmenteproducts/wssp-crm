@@ -77,6 +77,9 @@ export async function updateSettings(
       | "whatsapp_phone_number_id"
       | "whatsapp_business_account_id"
       | "whatsapp_verify_token"
+      | "whatsapp_token_expires_at"
+      | "whatsapp_connection_status"
+      | "whatsapp_connected_at"
       | "classification_prompt"
       | "ai_engine_enabled"
     >

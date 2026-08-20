@@ -18,6 +18,12 @@ export type BusinessUser = {
   created_at: string;
 };
 
+export type WhatsAppConnectionStatus =
+  | "disconnected"
+  | "pending"
+  | "connected"
+  | "error";
+
 export type BusinessSettings = {
   business_id: string;
   openai_api_key: string | null;
@@ -25,6 +31,9 @@ export type BusinessSettings = {
   whatsapp_phone_number_id: string | null;
   whatsapp_business_account_id: string | null;
   whatsapp_verify_token: string | null;
+  whatsapp_token_expires_at: string | null;
+  whatsapp_connection_status: WhatsAppConnectionStatus;
+  whatsapp_connected_at: string | null;
   classification_prompt: string | null;
   ai_engine_enabled: boolean;
   updated_at: string;
@@ -41,6 +50,9 @@ export type BusinessSettingsPublic = {
   whatsapp_business_account_id: string | null;
   whatsapp_verify_token_set: boolean;
   whatsapp_verify_token_hint: string | null;
+  whatsapp_token_expires_at: string | null;
+  whatsapp_connection_status: WhatsAppConnectionStatus;
+  whatsapp_connected_at: string | null;
   classification_prompt: string | null;
   ai_engine_enabled: boolean;
   whatsapp_connected: boolean;
