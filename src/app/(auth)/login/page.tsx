@@ -37,7 +37,10 @@ export default function LoginPage() {
       </div>
 
       <p className="text-center font-mono text-xs tracking-wide text-outline">
-        © {new Date().getFullYear()} {APP_NAME}. Todos los derechos reservados.
+        © {new Date().getFullYear()} {APP_NAME}. Todos los derechos reservados.{" "}
+        <Link href={ROUTES.privacyPolicy} className="hover:text-primary hover:underline">
+          Política de Privacidad
+        </Link>
       </p>
     </div>
   );
