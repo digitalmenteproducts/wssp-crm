@@ -239,8 +239,20 @@ export async function ingestWhatsAppWebhook(
 
     try {
       const result = await persistInboundMessage(event);
-      if (result === "processed") {
+      if (result.status === "processed") {
         processed += 1;
+        // Fire-and-forget: no bloquear el 200 a Meta. Solo actúa si enabled.
+        void import("@/services/ai/ai-agent.service")
+          .then(({ processIncomingMessageWithAgent }) =>
+            processIncomingMessageWithAgent({
+              businessId: result.businessId,
+              conversationId: result.conversationId,
+              contactId: result.contactId,
+              inboundMessageId: result.messageId,
+              inboundBody: result.body,
+            }),
+          )
+          .catch(() => undefined);
       } else {
         skipped += 1;
       }
@@ -256,14 +268,24 @@ export async function ingestWhatsAppWebhook(
 
 async function persistInboundMessage(
   event: InboundWhatsAppMessage,
-): Promise<"processed" | "skipped"> {
+): Promise<
+  | {
+      status: "processed";
+      businessId: string;
+      conversationId: string;
+      contactId: string;
+      messageId: string;
+      body: string | null;
+    }
+  | { status: "skipped" }
+> {
   const { data: existingMessage } = await whatsappRepository.findMessageByWaId(
     event.businessId,
     event.waMessageId,
   );
 
   if (existingMessage) {
-    return "skipped";
+    return { status: "skipped" };
   }
 
   let contactId: string;
@@ -343,24 +365,36 @@ async function persistInboundMessage(
     conversationId = createdConversation.id;
   }
 
-  const { error: messageError } = await whatsappRepository.createMessage({
-    businessId: event.businessId,
-    conversationId,
-    waMessageId: event.waMessageId,
-    direction: "inbound",
-    type: event.type,
-    body: event.body,
-    rawPayload: event.raw,
-    createdAt: event.timestamp,
-  });
+  const { data: createdMessage, error: messageError } =
+    await whatsappRepository.createMessage({
+      businessId: event.businessId,
+      conversationId,
+      waMessageId: event.waMessageId,
+      direction: "inbound",
+      type: event.type,
+      body: event.body,
+      rawPayload: event.raw,
+      createdAt: event.timestamp,
+    });
 
   if (messageError) {
     if (messageError.code === "23505") {
-      return "skipped";
+      return { status: "skipped" };
     }
 
     throw new Error(messageError.message);
   }
 
-  return "processed";
+  if (!createdMessage) {
+    throw new Error("No se pudo crear el mensaje.");
+  }
+
+  return {
+    status: "processed",
+    businessId: event.businessId,
+    conversationId,
+    contactId,
+    messageId: createdMessage.id,
+    body: event.body,
+  };
 }

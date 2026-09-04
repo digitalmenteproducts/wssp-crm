@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Bot,
   Building2,
   FileText,
   HelpCircle,
@@ -31,6 +32,7 @@ const PRIMARY_NAV: NavItem[] = [
   { href: ROUTES.segmentos, label: "Segmentos", icon: Layers },
   { href: ROUTES.plantillas, label: "Plantillas", icon: FileText },
   { href: ROUTES.campanas, label: "Campañas", icon: Megaphone },
+  { href: ROUTES.agenteIa, label: "Agente IA", icon: Bot },
   { href: ROUTES.configuracion, label: "Configuración", icon: Settings },
 ];
 
