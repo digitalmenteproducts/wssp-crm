@@ -355,7 +355,7 @@ export function formatKnowledgeForPrompt(entries: AiKnowledgeEntry[]): string {
     .join("\n\n");
 }
 
-/** Ajusta confidence cuando el modelo dice que falta info pero marca high. */
+/** Ajusta confidence/handoff inconsistentes sin forzar handoff por falta de FAQ. */
 export function reconcileAgentConfidence(input: {
   result: {
     reply: string;
@@ -363,7 +363,7 @@ export function reconcileAgentConfidence(input: {
     handoff_reason: string | null;
     confidence: "high" | "medium" | "low";
   };
-  knowledgeCount: number;
+  userMessage?: string;
 }): {
   reply: string;
   should_handoff: boolean;
@@ -371,24 +371,130 @@ export function reconcileAgentConfidence(input: {
   confidence: "high" | "medium" | "low";
 } {
   const result = { ...input.result };
-  const combined = `${result.reply}\n${result.handoff_reason ?? ""}`;
-  const lacksKnowledge =
-    /no tengo (la )?informaci[oó]n|falta (de )?informaci[oó]n|sin informaci[oó]n|no cuento con|no dispon(go|emos)|no est[aá] (en|disponible)|informaci[oó]n cr[ií]tica/i.test(
+  const combined = `${input.userMessage ?? ""}\n${result.reply}\n${result.handoff_reason ?? ""}`;
+
+  const medicalSensitive =
+    /medicamento|medicaci[oó]n|embaraz|lactancia|diagn[oó]stic|contraindica|s[ií]ntoma|estudio m[eé]dico|receta|qu[eé] me (puedo|debo) tomar|b[oó]tox.*(embaraz|lact)|puedo hacerme.*(embaraz|lact)/i.test(
       combined,
     );
 
-  if (input.knowledgeCount === 0 && result.should_handoff) {
+  const inventingConfirmedFact =
+    /no tengo (la )?informaci[oó]n|no est[aá] confirmad|no figura|no dispon(go|emos) de (un )?precio|no tengo un precio/i.test(
+      `${result.reply}\n${result.handoff_reason ?? ""}`,
+    );
+
+  // Inferencia segura presentada como certeza absoluta + high → bajar a medium.
+  if (
+    result.confidence === "high" &&
+    /normalmente|en principio|por lo general|suele|probablemente/i.test(
+      result.reply,
+    ) &&
+    !medicalSensitive
+  ) {
+    result.confidence = "medium";
+  }
+
+  if (medicalSensitive) {
+    result.should_handoff = true;
+    if (!result.handoff_reason) {
+      result.handoff_reason = "Consulta médica personalizada; requiere profesional.";
+    }
     if (result.confidence === "high") {
       result.confidence = "low";
     }
     return result;
   }
 
-  if (lacksKnowledge) {
-    if (result.confidence === "high") {
-      result.confidence = "low";
-    } else if (result.confidence === "medium" && result.should_handoff) {
-      result.confidence = "low";
+  // Dato de negocio no confirmado: no permitir high.
+  if (inventingConfirmedFact && result.confidence === "high") {
+    result.confidence = "low";
+  }
+
+  return result;
+}
+
+/** ¿Debemos forzar handoff tras la respuesta del modelo? */
+export function shouldForceHandoff(input: {
+  result: {
+    reply: string;
+    should_handoff: boolean;
+    handoff_reason: string | null;
+    confidence: "high" | "medium" | "low";
+  };
+  userMessage: string;
+  handoffEnabled: boolean;
+}): boolean {
+  if (!input.handoffEnabled) return false;
+  if (input.result.should_handoff) return false; // ya marcado
+
+  const combined = `${input.userMessage}\n${input.result.reply}\n${input.result.handoff_reason ?? ""}`;
+
+  // Médico / personalizado: sí.
+  if (
+    /medicamento|embaraz|diagn[oó]stic|contraindica|s[ií]ntoma|estudio m[eé]dico|receta|qu[eé] me (puedo|debo) tomar/i.test(
+      combined,
+    )
+  ) {
+    return true;
+  }
+
+  // Pedido explícito de humano.
+  if (
+    /hablar con (una )?persona|hablar con (un )?(humano|asesor|alguien)|pasar con|atenci[oó]n humana|operador/i.test(
+      input.userMessage,
+    )
+  ) {
+    return true;
+  }
+
+  // No forzar handoff solo por confidence low en preguntas casuales.
+  return false;
+}
+
+/** Preguntas de bajo riesgo: no deben quedar con handoff automático del modelo. */
+export function isLowRiskConversationalQuery(userMessage: string): boolean {
+  return /lluvia|mal tiempo|acompa[nñ]ad|llegar caminando|a pie|estacionamiento|parking|aire acondicionado|wifi|ba[nñ]o|sala de espera/i.test(
+    userMessage,
+  );
+}
+
+export function softenLowRiskHandoff(input: {
+  result: {
+    reply: string;
+    should_handoff: boolean;
+    handoff_reason: string | null;
+    confidence: "high" | "medium" | "low";
+  };
+  userMessage: string;
+}): {
+  reply: string;
+  should_handoff: boolean;
+  handoff_reason: string | null;
+  confidence: "high" | "medium" | "low";
+} {
+  const result = { ...input.result };
+  if (!isLowRiskConversationalQuery(input.userMessage)) {
+    return result;
+  }
+
+  if (
+    /aire acondicionado|estacionamiento|parking|wifi/i.test(input.userMessage) &&
+    /cuentan con|suelen contar|normalmente.*aire|s[ií], (tenemos|hay)/i.test(
+      result.reply,
+    ) &&
+    !/no (tengo|est[aá]) confirmad|no figura|no dispon/i.test(result.reply)
+  ) {
+    result.confidence = "low";
+  }
+
+  if (result.should_handoff) {
+    result.should_handoff = false;
+    result.handoff_reason = null;
+    if (
+      result.confidence === "low" &&
+      /lluvia|acompa[nñ]ad|caminando|a pie/i.test(input.userMessage)
+    ) {
+      result.confidence = "medium";
     }
   }
 

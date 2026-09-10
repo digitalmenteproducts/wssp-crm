@@ -14,8 +14,11 @@ import * as businessService from "@/services/business/business.service";
 import { buildAgentSystemPrompt } from "@/lib/ai/agent-prompt";
 import {
   formatKnowledgeForPrompt,
+  normalizeText,
   rankKnowledgeEntriesDetailed,
   reconcileAgentConfidence,
+  shouldForceHandoff,
+  softenLowRiskHandoff,
 } from "@/lib/ai/knowledge-retrieval";
 import {
   estimateOpenAiCostUsd,
@@ -278,7 +281,27 @@ async function runAgentGeneration(input: {
     input.userMessage,
     5,
   );
-  const ranked = rankedDetailed.map((item) => item.entry);
+  let ranked = rankedDetailed.map((item) => item.entry);
+
+  // Contexto suave: si no hubo match, aportar entradas ancla (horario/ubicación/general).
+  if (ranked.length === 0 && (knowledgeRows?.length ?? 0) > 0) {
+    const preferred = (knowledgeRows ?? []).filter((entry) => {
+      const title = normalizeText(entry.title);
+      return (
+        title.includes("ubicacion") ||
+        title.includes("horario") ||
+        title.includes("contacto") ||
+        title.includes("informacion general")
+      );
+    });
+    const ambient =
+      preferred.length > 0
+        ? preferred.slice(0, 2)
+        : (knowledgeRows ?? [])
+            .filter((entry) => entry.category === "negocio")
+            .slice(0, 2);
+    ranked = ambient.length > 0 ? ambient : (knowledgeRows ?? []).slice(0, 2);
+  }
 
   console.info("[ai-agent] knowledge_retrieval", {
     knowledge_query: input.userMessage.slice(0, 200),
@@ -288,6 +311,8 @@ async function runAgentGeneration(input: {
       category: item.entry.category,
       score: item.score,
     })),
+    knowledge_ambient_fallback:
+      rankedDetailed.length === 0 ? ranked.map((e) => e.title) : [],
     knowledge_count_available: knowledgeRows?.length ?? 0,
   });
 
@@ -313,20 +338,28 @@ async function runAgentGeneration(input: {
 
   let result = reconcileAgentConfidence({
     result: generated.result,
-    knowledgeCount: ranked.length,
+    userMessage: input.userMessage,
+  });
+
+  result = softenLowRiskHandoff({
+    result,
+    userMessage: input.userMessage,
   });
 
   if (
-    input.settings.human_handoff_enabled &&
-    result.confidence === "low" &&
-    !result.should_handoff
+    shouldForceHandoff({
+      result,
+      userMessage: input.userMessage,
+      handoffEnabled: input.settings.human_handoff_enabled,
+    })
   ) {
     result = {
       ...result,
       should_handoff: true,
       handoff_reason:
         result.handoff_reason ??
-        "Baja confianza en la respuesta; se requiere atención humana.",
+        "Se requiere atención humana para esta consulta.",
+      confidence: result.confidence === "high" ? "low" : result.confidence,
     };
   }
 
