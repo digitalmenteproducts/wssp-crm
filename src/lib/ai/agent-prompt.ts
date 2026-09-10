@@ -58,5 +58,9 @@ ${input.knowledgeBlock}
 
 Debes responder ÚNICAMENTE con un JSON válido (sin markdown) con esta forma exacta:
 {"reply":"texto para el cliente","should_handoff":false,"handoff_reason":null,"confidence":"high"}
-confidence debe ser "high", "medium" o "low".`;
+confidence debe ser "high", "medium" o "low".
+Reglas de confidence:
+- Si usas datos concretos de la base de conocimiento, confidence puede ser "high" o "medium".
+- Si faltan datos o dices que no tienes información, confidence DEBE ser "low" (nunca "high") y should_handoff=true cuando el handoff esté habilitado.
+- Nunca combines confidence="high" con una respuesta del tipo "no tengo información".`;
 }

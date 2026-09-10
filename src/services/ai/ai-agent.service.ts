@@ -14,7 +14,8 @@ import * as businessService from "@/services/business/business.service";
 import { buildAgentSystemPrompt } from "@/lib/ai/agent-prompt";
 import {
   formatKnowledgeForPrompt,
-  rankKnowledgeEntries,
+  rankKnowledgeEntriesDetailed,
+  reconcileAgentConfidence,
 } from "@/lib/ai/knowledge-retrieval";
 import {
   estimateOpenAiCostUsd,
@@ -272,11 +273,24 @@ async function runAgentGeneration(input: {
       limit: 80,
     });
 
-  const ranked = rankKnowledgeEntries(
+  const rankedDetailed = rankKnowledgeEntriesDetailed(
     knowledgeRows ?? [],
     input.userMessage,
-    6,
+    5,
   );
+  const ranked = rankedDetailed.map((item) => item.entry);
+
+  console.info("[ai-agent] knowledge_retrieval", {
+    knowledge_query: input.userMessage.slice(0, 200),
+    business_id: input.businessId,
+    knowledge_entries_selected: rankedDetailed.map((item) => ({
+      title: item.entry.title,
+      category: item.entry.category,
+      score: item.score,
+    })),
+    knowledge_count_available: knowledgeRows?.length ?? 0,
+  });
+
   const systemPrompt = buildAgentSystemPrompt({
     settings: input.settings,
     knowledgeBlock: formatKnowledgeForPrompt(ranked),
@@ -297,7 +311,10 @@ async function runAgentGeneration(input: {
     return generated;
   }
 
-  let result = generated.result;
+  let result = reconcileAgentConfidence({
+    result: generated.result,
+    knowledgeCount: ranked.length,
+  });
 
   if (
     input.settings.human_handoff_enabled &&
