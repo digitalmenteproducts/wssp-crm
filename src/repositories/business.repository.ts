@@ -80,6 +80,8 @@ export async function updateSettings(
       | "whatsapp_token_expires_at"
       | "whatsapp_connection_status"
       | "whatsapp_connected_at"
+      | "whatsapp_display_phone"
+      | "whatsapp_coexistence"
       | "classification_prompt"
       | "ai_engine_enabled"
     >

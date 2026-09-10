@@ -34,6 +34,8 @@ export type BusinessSettings = {
   whatsapp_token_expires_at: string | null;
   whatsapp_connection_status: WhatsAppConnectionStatus;
   whatsapp_connected_at: string | null;
+  whatsapp_display_phone: string | null;
+  whatsapp_coexistence: boolean;
   classification_prompt: string | null;
   ai_engine_enabled: boolean;
   updated_at: string;
@@ -53,6 +55,8 @@ export type BusinessSettingsPublic = {
   whatsapp_token_expires_at: string | null;
   whatsapp_connection_status: WhatsAppConnectionStatus;
   whatsapp_connected_at: string | null;
+  whatsapp_display_phone: string | null;
+  whatsapp_coexistence: boolean;
   classification_prompt: string | null;
   ai_engine_enabled: boolean;
   whatsapp_connected: boolean;

@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ROUTES } from "@/config/app";
-import {
-  getOptionalServerEnv,
-  getPublicEnv,
-} from "@/lib/env";
+import { getOptionalServerEnv, getPublicEnv } from "@/lib/env";
 import {
   META_OAUTH_STATE_COOKIE,
   META_OAUTH_STATE_TTL_SECONDS,
@@ -18,9 +15,35 @@ import * as businessService from "@/services/business/business.service";
 
 const GRAPH_VERSION = "v21.0";
 
+/**
+ * Dominio público de la app. Nunca usar el dashboard de Vercel
+ * (`vercel.com/<team>/<project>`).
+ */
+function normalizePublicAppUrl(value: string | null | undefined): string | null {
+  if (!value?.trim()) return null;
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+    // Dashboard / consola de Vercel — no es el origen de la app.
+    if (url.hostname === "vercel.com") {
+      return null;
+    }
+    return url.origin.replace(/\/$/, "");
+  } catch {
+    return null;
+  }
+}
+
 function appBaseUrl(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
-  if (fromEnv) return fromEnv;
+  // Preferir APP_URL server-side (runtime) para no depender solo del inline de build.
+  const fromServer = normalizePublicAppUrl(process.env.APP_URL);
+  if (fromServer) return fromServer;
+
+  const fromPublic = normalizePublicAppUrl(process.env.NEXT_PUBLIC_APP_URL);
+  if (fromPublic) return fromPublic;
+
   return "http://localhost:3000";
 }
 
@@ -28,7 +51,10 @@ export function metaOAuthCallbackUrl(): string {
   return `${appBaseUrl()}/api/oauth/meta/callback`;
 }
 
-export function settingsRedirect(status: "success" | "error" | "pending", reason?: string) {
+export function settingsRedirect(
+  status: "success" | "error" | "pending",
+  reason?: string,
+) {
   const url = new URL(ROUTES.configuracion, `${appBaseUrl()}/`);
   url.searchParams.set("tab", "integraciones");
   url.searchParams.set("whatsapp", status);
@@ -62,64 +88,18 @@ function canManageIntegrations(role: string): boolean {
   return role === "owner" || role === "admin";
 }
 
-export async function startMetaOAuth(): Promise<NextResponse> {
-  const { data: authData, error: authError } = await getCurrentUser();
-  if (authError || !authData.user) {
-    const url = new URL(ROUTES.login, `${appBaseUrl()}/`);
-    url.searchParams.set("next", ROUTES.configuracion);
-    return NextResponse.redirect(url);
-  }
-
-  const workspace = await businessService.getCurrentWorkspace();
-  if (!workspace.ok || !workspace.workspace) {
-    return NextResponse.redirect(
-      settingsRedirect("error", "sin_empresa"),
-    );
-  }
-
-  if (!canManageIntegrations(workspace.workspace.membership.role)) {
-    return NextResponse.redirect(
-      settingsRedirect("error", "sin_permiso"),
-    );
-  }
-
+function resolveMetaAppId(): string | null {
   const env = getOptionalServerEnv();
-  const appId = env.META_APP_ID ?? process.env.NEXT_PUBLIC_META_APP_ID;
-  if (!env.META_APP_SECRET || !appId) {
-    return NextResponse.redirect(
-      settingsRedirect("error", "meta_env_faltante"),
-    );
-  }
+  return env.META_APP_ID ?? process.env.NEXT_PUBLIC_META_APP_ID ?? null;
+}
 
-  const { token } = createMetaOAuthState({
-    userId: authData.user.id,
-    businessId: workspace.workspace.business.id,
-  });
-
-  const authUrl = new URL(`https://www.facebook.com/${GRAPH_VERSION}/dialog/oauth`);
-  authUrl.searchParams.set("client_id", appId);
-  authUrl.searchParams.set("redirect_uri", metaOAuthCallbackUrl());
-  authUrl.searchParams.set("state", token);
-  authUrl.searchParams.set("response_type", "code");
-  // Scopes mínimos; Embedded Signup completo usará config_id vía SDK.
-  authUrl.searchParams.set(
-    "scope",
-    "whatsapp_business_management,whatsapp_business_messaging,business_management",
+function resolveMetaConfigId(): string | null {
+  const env = getOptionalServerEnv();
+  return (
+    env.META_LOGIN_CONFIG_ID ??
+    process.env.NEXT_PUBLIC_META_LOGIN_CONFIG_ID ??
+    null
   );
-
-  if (env.META_LOGIN_CONFIG_ID) {
-    authUrl.searchParams.set("config_id", env.META_LOGIN_CONFIG_ID);
-  }
-
-  const response = NextResponse.redirect(authUrl.toString());
-  setStateCookie(response, token);
-
-  // Marca pending sin tocar credenciales existentes.
-  await businessRepository.updateSettings(workspace.workspace.business.id, {
-    whatsapp_connection_status: "pending",
-  });
-
-  return response;
 }
 
 type TokenExchangeResult =
@@ -135,7 +115,7 @@ async function exchangeCodeForToken(input: {
   redirectUri?: string | null;
 }): Promise<TokenExchangeResult> {
   const env = getOptionalServerEnv();
-  const appId = env.META_APP_ID ?? process.env.NEXT_PUBLIC_META_APP_ID;
+  const appId = resolveMetaAppId();
   const appSecret = env.META_APP_SECRET;
 
   if (!appId || !appSecret) {
@@ -174,6 +154,99 @@ async function exchangeCodeForToken(input: {
         ? json.expires_in
         : null,
   };
+}
+
+async function subscribeWabaToApp(input: {
+  wabaId: string;
+  accessToken: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const response = await fetch(
+    `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(input.wabaId)}/subscribed_apps`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.accessToken}`,
+      },
+      cache: "no-store",
+    },
+  );
+
+  const json = (await response.json()) as {
+    success?: boolean;
+    error?: { message?: string };
+  };
+
+  if (!response.ok || json.success === false) {
+    return {
+      ok: false,
+      error: json.error?.message ?? "No se pudo suscribir la WABA al webhook.",
+    };
+  }
+
+  return { ok: true };
+}
+
+async function resolvePhoneNumberId(input: {
+  wabaId: string;
+  accessToken: string;
+  preferredPhoneNumberId?: string | null;
+}): Promise<{
+  phoneNumberId: string | null;
+  displayPhone: string | null;
+}> {
+  if (input.preferredPhoneNumberId?.trim()) {
+    const detail = await fetchPhoneDetails(
+      input.preferredPhoneNumberId.trim(),
+      input.accessToken,
+    );
+    return {
+      phoneNumberId: input.preferredPhoneNumberId.trim(),
+      displayPhone: detail.displayPhone,
+    };
+  }
+
+  const response = await fetch(
+    `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(input.wabaId)}/phone_numbers?fields=id,display_phone_number,verified_name`,
+    {
+      headers: { Authorization: `Bearer ${input.accessToken}` },
+      cache: "no-store",
+    },
+  );
+
+  const json = (await response.json()) as {
+    data?: Array<{ id?: string; display_phone_number?: string }>;
+    error?: { message?: string };
+  };
+
+  const first = json.data?.[0];
+  if (!first?.id) {
+    return { phoneNumberId: null, displayPhone: null };
+  }
+
+  return {
+    phoneNumberId: first.id,
+    displayPhone: first.display_phone_number ?? null,
+  };
+}
+
+async function fetchPhoneDetails(
+  phoneNumberId: string,
+  accessToken: string,
+): Promise<{ displayPhone: string | null }> {
+  const response = await fetch(
+    `https://graph.facebook.com/${GRAPH_VERSION}/${encodeURIComponent(phoneNumberId)}?fields=display_phone_number,verified_name,is_on_biz_app,platform_type`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    },
+  );
+
+  const json = (await response.json()) as {
+    display_phone_number?: string;
+    error?: { message?: string };
+  };
+
+  return { displayPhone: json.display_phone_number ?? null };
 }
 
 async function assertStateAndMembership(input: {
@@ -220,7 +293,6 @@ async function assertStateAndMembership(input: {
     return { ok: false, error: "Sin permiso para conectar WhatsApp." };
   }
 
-  // Confirma que el workspace activo es el del state (primera membresía hoy).
   const workspace = await businessService.getCurrentWorkspace();
   if (
     !workspace.ok ||
@@ -235,6 +307,82 @@ async function assertStateAndMembership(input: {
     userId: authData.user.id,
     businessId: verified.payload.businessId,
   };
+}
+
+/**
+ * Prepara Embedded Signup: cookie state + datos públicos para FB.login.
+ * No redirige a Meta (eso lo hace el SDK en el cliente).
+ */
+export async function prepareEmbeddedSignup(): Promise<
+  | {
+      ok: true;
+      response: NextResponse;
+    }
+  | { ok: false; status: number; error: string }
+> {
+  const { data: authData, error: authError } = await getCurrentUser();
+  if (authError || !authData.user) {
+    return { ok: false, status: 401, error: "Debes iniciar sesión." };
+  }
+
+  const workspace = await businessService.getCurrentWorkspace();
+  if (!workspace.ok || !workspace.workspace) {
+    return { ok: false, status: 400, error: "Sin empresa activa." };
+  }
+
+  if (!canManageIntegrations(workspace.workspace.membership.role)) {
+    return { ok: false, status: 403, error: "Sin permiso." };
+  }
+
+  const env = getOptionalServerEnv();
+  const appId = resolveMetaAppId();
+  const configId = resolveMetaConfigId();
+
+  if (!env.META_APP_SECRET || !appId || !configId) {
+    return {
+      ok: false,
+      status: 500,
+      error:
+        "Faltan META_APP_SECRET, META_APP_ID/NEXT_PUBLIC_META_APP_ID o META_LOGIN_CONFIG_ID.",
+    };
+  }
+
+  const callbackUrl = metaOAuthCallbackUrl();
+  if (
+    callbackUrl.includes("vercel.com/") &&
+    !callbackUrl.includes(".vercel.app/")
+  ) {
+    return {
+      ok: false,
+      status: 500,
+      error:
+        "NEXT_PUBLIC_APP_URL/APP_URL inválida (parece URL del dashboard de Vercel). Usa https://wssp-crm.vercel.app",
+    };
+  }
+
+  const { token } = createMetaOAuthState({
+    userId: authData.user.id,
+    businessId: workspace.workspace.business.id,
+  });
+
+  await businessRepository.updateSettings(workspace.workspace.business.id, {
+    whatsapp_connection_status: "pending",
+  });
+
+  const body = {
+    ok: true as const,
+    state: token,
+    appId,
+    configId,
+    graphVersion: GRAPH_VERSION,
+    coexistenceFeatureType: "whatsapp_business_app_onboarding" as const,
+    redirectUri: callbackUrl,
+    appUrl: appBaseUrl(),
+  };
+
+  const response = NextResponse.json(body);
+  setStateCookie(response, token);
+  return { ok: true, response };
 }
 
 export async function handleMetaOAuthCallback(input: {
@@ -265,53 +413,12 @@ export async function handleMetaOAuthCallback(input: {
     return response;
   }
 
-  if (!input.code) {
-    const response = NextResponse.redirect(
-      settingsRedirect("error", "sin_codigo"),
-    );
-    clearStateCookie(response);
-    return response;
-  }
-
-  const exchanged = await exchangeCodeForToken({
-    code: input.code,
-    redirectUri: metaOAuthCallbackUrl(),
-  });
-
-  if (!exchanged.ok) {
-    await businessRepository.updateSettings(gate.businessId, {
-      whatsapp_connection_status: "error",
-    });
-    const response = NextResponse.redirect(
-      settingsRedirect("error", "exchange_fallido"),
-    );
-    clearStateCookie(response);
-    return response;
-  }
-
-  const expiresAt =
-    exchanged.expiresIn != null
-      ? new Date(Date.now() + exchanged.expiresIn * 1000).toISOString()
-      : null;
-
-  // Callback redirect: guarda token. WABA/phone llegan vía /complete (SDK).
-  const { error } = await businessRepository.updateSettings(gate.businessId, {
-    whatsapp_access_token: exchanged.accessToken,
-    whatsapp_token_expires_at: expiresAt,
-    whatsapp_connection_status: "pending",
-    whatsapp_connected_at: new Date().toISOString(),
-  });
-
-  if (error) {
-    const response = NextResponse.redirect(
-      settingsRedirect("error", "persistencia"),
-    );
-    clearStateCookie(response);
-    return response;
-  }
-
-  const response = NextResponse.redirect(settingsRedirect("pending"));
-  clearStateCookie(response);
+  // El flujo principal es Embedded Signup → /complete.
+  // El callback solo confirma y vuelve a Integraciones.
+  const response = NextResponse.redirect(
+    settingsRedirect(input.code ? "pending" : "error", "usar_embedded_signup"),
+  );
+  // Conservamos cookie state un momento por si el SDK aún completa.
   return response;
 }
 
@@ -321,8 +428,16 @@ export async function completeMetaOAuth(input: {
   stateCookie: string | null;
   wabaId?: string | null;
   phoneNumberId?: string | null;
+  coexistence?: boolean;
 }): Promise<
-  | { ok: true; message: string }
+  | {
+      ok: true;
+      message: string;
+      phoneNumberId: string | null;
+      wabaId: string | null;
+      displayPhone: string | null;
+      coexistence: boolean;
+    }
   | { ok: false; error: string; status: number }
 > {
   const gate = await assertStateAndMembership({
@@ -334,10 +449,10 @@ export async function completeMetaOAuth(input: {
     return { ok: false, error: gate.error, status: 403 };
   }
 
-  // Embedded Signup JS code exchange usually omits redirect_uri.
   const exchanged = await exchangeCodeForToken({
     code: input.code,
-    redirectUri: null,
+    // Debe coincidir exactamente con el redirect_uri del login/dialog.
+    redirectUri: metaOAuthCallbackUrl(),
   });
 
   if (!exchanged.ok) {
@@ -347,31 +462,77 @@ export async function completeMetaOAuth(input: {
     return { ok: false, error: exchanged.error, status: 400 };
   }
 
+  const wabaId = input.wabaId?.trim() || null;
+  if (!wabaId) {
+    await businessRepository.updateSettings(gate.businessId, {
+      whatsapp_connection_status: "error",
+    });
+    return {
+      ok: false,
+      error: "Meta no devolvió WABA ID. Completa Embedded Signup de nuevo.",
+      status: 400,
+    };
+  }
+
+  const resolvedPhone = await resolvePhoneNumberId({
+    wabaId,
+    accessToken: exchanged.accessToken,
+    preferredPhoneNumberId: input.phoneNumberId,
+  });
+
+  if (!resolvedPhone.phoneNumberId) {
+    await businessRepository.updateSettings(gate.businessId, {
+      whatsapp_access_token: exchanged.accessToken,
+      whatsapp_business_account_id: wabaId,
+      whatsapp_connection_status: "error",
+    });
+    return {
+      ok: false,
+      error:
+        "No se obtuvo Phone Number ID. Revisa la cuenta WhatsApp en Meta Business.",
+      status: 400,
+    };
+  }
+
+  // Coexistence: no registrar el número (ya está en WhatsApp Business App).
+  // Cloud API onboarding estándar también puede omitir register aquí si Meta
+  // ya lo dejó listo vía Embedded Signup.
+  const subscribed = await subscribeWabaToApp({
+    wabaId,
+    accessToken: exchanged.accessToken,
+  });
+
+  if (!subscribed.ok) {
+    await businessRepository.updateSettings(gate.businessId, {
+      whatsapp_access_token: exchanged.accessToken,
+      whatsapp_business_account_id: wabaId,
+      whatsapp_phone_number_id: resolvedPhone.phoneNumberId,
+      whatsapp_display_phone: resolvedPhone.displayPhone,
+      whatsapp_connection_status: "error",
+      whatsapp_coexistence: Boolean(input.coexistence),
+    });
+    return {
+      ok: false,
+      error: subscribed.error,
+      status: 502,
+    };
+  }
+
   const expiresAt =
     exchanged.expiresIn != null
       ? new Date(Date.now() + exchanged.expiresIn * 1000).toISOString()
       : null;
 
-  const hasAssets = Boolean(input.wabaId?.trim() && input.phoneNumberId?.trim());
-
-  const patch: Parameters<typeof businessRepository.updateSettings>[1] = {
+  const { error } = await businessRepository.updateSettings(gate.businessId, {
     whatsapp_access_token: exchanged.accessToken,
     whatsapp_token_expires_at: expiresAt,
-    whatsapp_connection_status: hasAssets ? "connected" : "pending",
+    whatsapp_business_account_id: wabaId,
+    whatsapp_phone_number_id: resolvedPhone.phoneNumberId,
+    whatsapp_display_phone: resolvedPhone.displayPhone,
+    whatsapp_connection_status: "connected",
     whatsapp_connected_at: new Date().toISOString(),
-  };
-
-  if (input.wabaId?.trim()) {
-    patch.whatsapp_business_account_id = input.wabaId.trim();
-  }
-  if (input.phoneNumberId?.trim()) {
-    patch.whatsapp_phone_number_id = input.phoneNumberId.trim();
-  }
-
-  const { error } = await businessRepository.updateSettings(
-    gate.businessId,
-    patch,
-  );
+    whatsapp_coexistence: Boolean(input.coexistence),
+  });
 
   if (error) {
     return { ok: false, error: "No se pudo guardar la conexión.", status: 500 };
@@ -379,13 +540,54 @@ export async function completeMetaOAuth(input: {
 
   return {
     ok: true,
-    message: hasAssets
-      ? "WhatsApp conectado."
-      : "Token guardado. Falta WABA/Phone Number ID (Embedded Signup SDK).",
+    message: input.coexistence
+      ? "WhatsApp conectado con coexistencia (Business App + Cloud API)."
+      : "WhatsApp conectado.",
+    phoneNumberId: resolvedPhone.phoneNumberId,
+    wabaId,
+    displayPhone: resolvedPhone.displayPhone,
+    coexistence: Boolean(input.coexistence),
   };
 }
 
-/** Solo para tipado / smoke: asegura que public env existe en rutas server. */
+export async function disconnectWhatsAppForCurrentBusiness(): Promise<
+  | { ok: true; message: string }
+  | { ok: false; error: string }
+> {
+  const workspace = await businessService.getCurrentWorkspace();
+  if (!workspace.ok || !workspace.workspace) {
+    return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
+  }
+
+  if (!canManageIntegrations(workspace.workspace.membership.role)) {
+    return { ok: false, error: "Sin permiso." };
+  }
+
+  const { error } = await businessRepository.updateSettings(
+    workspace.workspace.business.id,
+    {
+      whatsapp_access_token: null,
+      whatsapp_phone_number_id: null,
+      whatsapp_business_account_id: null,
+      whatsapp_token_expires_at: null,
+      whatsapp_display_phone: null,
+      whatsapp_connection_status: "disconnected",
+      whatsapp_connected_at: null,
+      whatsapp_coexistence: false,
+    },
+  );
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+
+  return {
+    ok: true,
+    message:
+      "WhatsApp desconectado en Digitalmente CRM. La app de WhatsApp Business del cliente no se modifica.",
+  };
+}
+
 export function assertPublicEnvLoaded() {
   getPublicEnv();
 }

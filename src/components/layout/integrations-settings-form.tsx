@@ -6,19 +6,13 @@ import {
   updateIntegrationsAction,
   type SettingsFormState,
 } from "@/app/(dashboard)/configuracion/actions";
+import { WhatsAppConnectCard } from "@/components/layout/whatsapp-connect-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { BusinessSettingsPublic } from "@/types/business";
 
 const initialState: SettingsFormState = {};
-
-const STATUS_LABEL: Record<string, string> = {
-  disconnected: "Desconectado",
-  pending: "Pendiente / incompleto",
-  connected: "Conectado",
-  error: "Error",
-};
 
 type IntegrationsSettingsFormProps = {
   settings: BusinessSettingsPublic;
@@ -39,50 +33,9 @@ export function IntegrationsSettingsForm({
     initialState,
   );
 
-  const connectionStatus = settings.whatsapp_connection_status;
-
   return (
     <div className="space-y-6">
-      <div className="space-y-3 rounded-lg border border-outline-variant/40 bg-muted/30 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold text-on-surface">
-              Conexión WhatsApp (Meta)
-            </p>
-            <p className="text-xs text-secondary">
-              Estado: {STATUS_LABEL[connectionStatus] ?? connectionStatus}
-              {settings.whatsapp_connected_at
-                ? ` · desde ${new Date(settings.whatsapp_connected_at).toLocaleString("es")}`
-                : ""}
-            </p>
-          </div>
-          <a
-            href="/api/oauth/meta/start"
-            className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
-          >
-            Conectar WhatsApp
-          </a>
-        </div>
-        <p className="text-xs text-secondary">
-          Inicia el flujo OAuth de Meta. El Embedded Signup completo (SDK +
-          WABA/Phone Number) se añadirá en el siguiente paso. No uses esto aún
-          con el número real de Tredici.
-        </p>
-        {oauthFeedback?.status === "success" ||
-        oauthFeedback?.status === "pending" ? (
-          <p className="text-sm text-primary" role="status">
-            {oauthFeedback.status === "pending"
-              ? "OAuth parcialmente completado. Token guardado; faltan WABA/Phone Number ID del Embedded Signup."
-              : "WhatsApp conectado correctamente."}
-          </p>
-        ) : null}
-        {oauthFeedback?.status === "error" ? (
-          <p className="text-sm text-destructive" role="alert">
-            No se pudo completar la conexión
-            {oauthFeedback.reason ? ` (${oauthFeedback.reason})` : ""}.
-          </p>
-        ) : null}
-      </div>
+      <WhatsAppConnectCard settings={settings} oauthFeedback={oauthFeedback} />
 
       <form action={formAction} className="space-y-5">
         <div className="space-y-1.5">
@@ -112,30 +65,10 @@ export function IntegrationsSettingsForm({
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
           <div className="space-y-1.5">
             <Label
-              htmlFor="whatsapp_access_token"
-              className="font-mono text-xs tracking-wider text-on-surface-variant uppercase"
-            >
-              WhatsApp Access Token
-            </Label>
-            <Input
-              id="whatsapp_access_token"
-              name="whatsapp_access_token"
-              type="password"
-              autoComplete="off"
-              placeholder={
-                settings.whatsapp_access_token_set
-                  ? `Configurado (${settings.whatsapp_access_token_hint})`
-                  : "EAA..."
-              }
-              className="h-10 rounded-lg border-outline-variant bg-card font-mono text-sm"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label
               htmlFor="whatsapp_verify_token"
               className="font-mono text-xs tracking-wider text-on-surface-variant uppercase"
             >
-              Verify Token
+              Verify Token (webhook)
             </Label>
             <Input
               id="whatsapp_verify_token"
@@ -149,40 +82,16 @@ export function IntegrationsSettingsForm({
               }
               className="h-10 rounded-lg border-outline-variant bg-card font-mono text-sm"
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label
-              htmlFor="whatsapp_phone_number_id"
-              className="font-mono text-xs tracking-wider text-on-surface-variant uppercase"
-            >
-              Phone Number ID
-            </Label>
-            <Input
-              id="whatsapp_phone_number_id"
-              name="whatsapp_phone_number_id"
-              defaultValue={settings.whatsapp_phone_number_id ?? ""}
-              className="h-10 rounded-lg border-outline-variant bg-card font-mono text-sm"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label
-              htmlFor="whatsapp_business_account_id"
-              className="font-mono text-xs tracking-wider text-on-surface-variant uppercase"
-            >
-              Business Account ID
-            </Label>
-            <Input
-              id="whatsapp_business_account_id"
-              name="whatsapp_business_account_id"
-              defaultValue={settings.whatsapp_business_account_id ?? ""}
-              className="h-10 rounded-lg border-outline-variant bg-card font-mono text-sm"
-            />
+            <p className="text-xs text-secondary">
+              Debe coincidir con el Verify Token en Meta Developer → WhatsApp →
+              Configuration. No es el access token de OAuth.
+            </p>
           </div>
         </div>
 
         <div className="space-y-1.5">
           <Label className="font-mono text-xs tracking-wider text-on-surface-variant uppercase">
-            URL del Webhook
+            URL del Webhook (compartida)
           </Label>
           <Input
             readOnly
@@ -190,8 +99,9 @@ export function IntegrationsSettingsForm({
             className="h-10 rounded-lg border-outline-variant bg-muted font-mono text-xs"
           />
           <p className="text-xs text-secondary">
-            Configúrala en Meta Developer → WhatsApp → Configuration → Callback
-            URL. El Verify Token debe coincidir con el de arriba.
+            Un solo callback para todos los clientes. Tras Embedded Signup la
+            WABA se suscribe a esta app; el inbound resuelve empresa por{" "}
+            <span className="font-mono">phone_number_id</span>.
           </p>
         </div>
 

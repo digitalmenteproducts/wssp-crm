@@ -34,13 +34,6 @@ export async function updateIntegrationsAction(
 ): Promise<SettingsFormState> {
   const result = await businessService.updateIntegrations({
     openai_api_key: String(formData.get("openai_api_key") ?? ""),
-    whatsapp_access_token: String(formData.get("whatsapp_access_token") ?? ""),
-    whatsapp_phone_number_id: String(
-      formData.get("whatsapp_phone_number_id") ?? "",
-    ),
-    whatsapp_business_account_id: String(
-      formData.get("whatsapp_business_account_id") ?? "",
-    ),
     whatsapp_verify_token: String(formData.get("whatsapp_verify_token") ?? ""),
   });
 

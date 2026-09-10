@@ -1,19 +1,44 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
-import { startMetaOAuth } from "@/services/whatsapp/meta-oauth.service";
+import {
+  prepareEmbeddedSignup,
+  settingsRedirect,
+} from "@/services/whatsapp/meta-oauth.service";
 
 export const runtime = "nodejs";
 
 /**
- * Inicia OAuth Meta / preparación Embedded Signup.
+ * Prepara Embedded Signup (JSON).
  * GET /api/oauth/meta/start
+ * Preferir Accept: application/json desde el SDK client.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const wantsJson =
+    request.nextUrl.searchParams.get("format") === "json" ||
+    (request.headers.get("accept") ?? "").includes("application/json");
+
   try {
-    return await startMetaOAuth();
-  } catch {
+    if (wantsJson) {
+      const prepared = await prepareEmbeddedSignup();
+      if (!prepared.ok) {
+        return NextResponse.json(
+          { ok: false, error: prepared.error },
+          { status: prepared.status },
+        );
+      }
+      return prepared.response;
+    }
+
     return NextResponse.redirect(
-      new URL("/configuracion?tab=integraciones&whatsapp=error&reason=start_fallido", process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
+      settingsRedirect("error", "usar_boton_conectar"),
     );
+  } catch {
+    if (wantsJson) {
+      return NextResponse.json(
+        { ok: false, error: "No se pudo preparar Embedded Signup." },
+        { status: 500 },
+      );
+    }
+    return NextResponse.redirect(settingsRedirect("error", "start_fallido"));
   }
 }

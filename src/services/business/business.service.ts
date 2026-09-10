@@ -41,6 +41,8 @@ function toPublicSettings(settings: BusinessSettings): BusinessSettingsPublic {
     whatsapp_token_expires_at: settings.whatsapp_token_expires_at ?? null,
     whatsapp_connection_status: status,
     whatsapp_connected_at: settings.whatsapp_connected_at ?? null,
+    whatsapp_display_phone: settings.whatsapp_display_phone ?? null,
+    whatsapp_coexistence: Boolean(settings.whatsapp_coexistence),
     classification_prompt: settings.classification_prompt,
     ai_engine_enabled: settings.ai_engine_enabled,
     whatsapp_connected:
@@ -214,19 +216,8 @@ export async function updateIntegrations(
     patch.openai_api_key = parsed.data.openai_api_key?.trim();
   }
 
-  if (isSecretProvided(parsed.data.whatsapp_access_token)) {
-    patch.whatsapp_access_token = parsed.data.whatsapp_access_token?.trim();
-  }
-
-  if (typeof parsed.data.whatsapp_phone_number_id === "string") {
-    patch.whatsapp_phone_number_id =
-      parsed.data.whatsapp_phone_number_id.trim() || null;
-  }
-
-  if (typeof parsed.data.whatsapp_business_account_id === "string") {
-    patch.whatsapp_business_account_id =
-      parsed.data.whatsapp_business_account_id.trim() || null;
-  }
+  // Token / WABA / Phone Number ID solo vía Embedded Signup (oauth/meta/complete).
+  // El formulario de Integraciones no debe sobrescribirlos con vacíos.
 
   if (isSecretProvided(parsed.data.whatsapp_verify_token)) {
     patch.whatsapp_verify_token = parsed.data.whatsapp_verify_token?.trim();
