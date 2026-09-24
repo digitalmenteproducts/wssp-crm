@@ -71,3 +71,23 @@ export async function updateContactTagsAction(input: {
 
   return { ok: true, tags: result.tags, message: "Etiquetas guardadas." };
 }
+
+export async function createManualContactAction(
+  _prev: BoardActionState,
+  formData: FormData,
+): Promise<BoardActionState> {
+  const result = await boardService.createManualContactForCurrentBusiness({
+    name: String(formData.get("name") ?? ""),
+    phone: String(formData.get("phone") ?? ""),
+    email: String(formData.get("email") ?? ""),
+  });
+
+  revalidatePath(ROUTES.contactos);
+  revalidatePath(ROUTES.agenda);
+
+  if (!result.ok) {
+    return { error: result.error };
+  }
+
+  return { message: "Creado correctamente." };
+}

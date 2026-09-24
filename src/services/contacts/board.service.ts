@@ -1,9 +1,12 @@
 import {
+  createManualContactSchema,
   reanalyzeContactSchema,
   updateContactStatusSchema,
+  type CreateManualContactInput,
   type ReanalyzeContactInput,
   type UpdateContactStatusInput,
 } from "@/schemas/contacts";
+import { normalizePhone } from "@/lib/phone";
 import * as contactsRepository from "@/repositories/contacts.repository";
 import { reanalyzeConversation } from "@/services/openai/classification-runner.service";
 import * as businessService from "@/services/business/business.service";
@@ -184,4 +187,87 @@ export async function reanalyzeContactForCurrentBusiness(
   }
 
   return reanalyzeConversation(data.id);
+}
+
+export async function createManualContactForCurrentBusiness(
+  input: CreateManualContactInput,
+): Promise<
+  | {
+      ok: true;
+      contact: {
+        id: string;
+        phone: string;
+        name: string | null;
+        email: string | null;
+        status: string;
+      };
+    }
+  | { ok: false; error: string }
+> {
+  const parsed = createManualContactSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: formatZodIssues(parsed.error) };
+  }
+
+  const workspace = await businessService.getCurrentWorkspace();
+  if (!workspace.ok || !workspace.workspace) {
+    return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
+  }
+
+  const phone = normalizePhone(parsed.data.phone);
+  if (phone.length < 8) {
+    return {
+      ok: false,
+      error: "Introduce un teléfono / WhatsApp válido (mín. 8 dígitos).",
+    };
+  }
+
+  const businessId = workspace.workspace.business.id;
+  const email =
+    parsed.data.email && parsed.data.email.trim().length > 0
+      ? parsed.data.email.trim()
+      : null;
+
+  const existing = await contactsRepository.findContactByPhoneForMember(
+    businessId,
+    phone,
+  );
+  if (existing.error) {
+    return { ok: false, error: existing.error.message };
+  }
+  if (existing.data) {
+    return {
+      ok: false,
+      error: "Ya existe un contacto con ese teléfono en esta empresa.",
+    };
+  }
+
+  const { data, error } = await contactsRepository.createContactForMember({
+    businessId,
+    phone,
+    name: parsed.data.name,
+    email,
+  });
+
+  if (error || !data) {
+    const msg = error?.message ?? "No se pudo crear el contacto.";
+    if (/duplicate|unique|contacts_business_id_phone/i.test(msg)) {
+      return {
+        ok: false,
+        error: "Ya existe un contacto con ese teléfono en esta empresa.",
+      };
+    }
+    return { ok: false, error: msg };
+  }
+
+  return {
+    ok: true,
+    contact: {
+      id: data.id,
+      phone: data.phone,
+      name: data.name,
+      email: data.email,
+      status: data.status,
+    },
+  };
 }

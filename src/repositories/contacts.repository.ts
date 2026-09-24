@@ -109,6 +109,52 @@ export async function listContactsSimple(businessId: string) {
     .returns<Array<{ id: string; name: string | null; phone: string }>>();
 }
 
+export async function findContactByPhoneForMember(
+  businessId: string,
+  phone: string,
+) {
+  const supabase = await createClient();
+  return supabase
+    .from("contacts")
+    .select("id, phone, name, email, status")
+    .eq("business_id", businessId)
+    .eq("phone", phone)
+    .maybeSingle<{
+      id: string;
+      phone: string;
+      name: string | null;
+      email: string | null;
+      status: string;
+    }>();
+}
+
+export async function createContactForMember(input: {
+  businessId: string;
+  phone: string;
+  name: string;
+  email: string | null;
+}) {
+  const supabase = await createClient();
+  return supabase
+    .from("contacts")
+    .insert({
+      business_id: input.businessId,
+      phone: input.phone,
+      name: input.name,
+      email: input.email,
+      status: "nuevo",
+    })
+    .select("id, phone, name, email, status, created_at")
+    .single<{
+      id: string;
+      phone: string;
+      name: string | null;
+      email: string | null;
+      status: string;
+      created_at: string;
+    }>();
+}
+
 export async function updateContactStatusForMember(input: {
   businessId: string;
   contactId: string;

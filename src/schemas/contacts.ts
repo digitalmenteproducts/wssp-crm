@@ -36,3 +36,24 @@ export type UpdateContactTagsInput = z.infer<typeof updateContactTagsSchema>;
 export const getContactDetailSchema = z.object({
   contactId: z.string().uuid("Contacto inválido."),
 });
+
+export const createManualContactSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, "El nombre es obligatorio.")
+    .max(120, "El nombre es demasiado largo."),
+  phone: z
+    .string()
+    .trim()
+    .min(1, "El teléfono es obligatorio.")
+    .max(40, "El teléfono es demasiado largo."),
+  email: z
+    .union([
+      z.literal(""),
+      z.email("Introduce un correo electrónico válido.").max(320),
+    ])
+    .optional(),
+});
+
+export type CreateManualContactInput = z.infer<typeof createManualContactSchema>;

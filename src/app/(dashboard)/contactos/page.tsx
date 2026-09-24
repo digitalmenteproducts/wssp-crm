@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 
 import { ContactBoardView } from "@/components/contacts/contact-board";
+import { CreateContactButton } from "@/components/contacts/create-contact-button";
 import { RunClassificationButton } from "@/components/contacts/run-classification-button";
 import { PageHeader } from "@/components/layout/page-header";
-import { contactsNavLabel } from "@/lib/industry";
+import {
+  contactSingularLabel,
+  contactsNavLabel,
+  newContactLabel,
+} from "@/lib/industry";
 import * as boardService from "@/services/contacts/board.service";
 import * as businessService from "@/services/business/business.service";
 
@@ -20,6 +25,8 @@ export default async function ContactosPage() {
       ? workspace.workspace.business.industry
       : "other";
   const contactsLabel = contactsNavLabel(industry);
+  const singular = contactSingularLabel(industry);
+  const newLabel = newContactLabel(industry);
   const result = await boardService.getBoardForCurrentBusiness();
 
   if (!result.ok) {
@@ -28,6 +35,12 @@ export default async function ContactosPage() {
         <PageHeader
           title={contactsLabel}
           description={`Pipeline de ${contactsLabel.toLowerCase()} WhatsApp.`}
+          actions={
+            <CreateContactButton
+              singularLabel={singular}
+              newLabel={newLabel}
+            />
+          }
         />
         <p className="text-sm text-destructive" role="alert">
           {result.error}
@@ -47,7 +60,15 @@ export default async function ContactosPage() {
             ? "Tablero de pacientes: arrastra tarjetas para cambiar el estado comercial."
             : "Tablero tipo Trello: arrastra tarjetas para cambiar el estado comercial."
         }
-        actions={<RunClassificationButton />}
+        actions={
+          <div className="flex flex-wrap items-start gap-2">
+            <CreateContactButton
+              singularLabel={singular}
+              newLabel={newLabel}
+            />
+            <RunClassificationButton />
+          </div>
+        }
       />
 
       <div className="mb-6 grid gap-4 md:grid-cols-3">

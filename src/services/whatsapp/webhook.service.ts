@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { getOptionalServerEnv } from "@/lib/env";
+import { normalizePhone } from "@/lib/phone";
 import * as whatsappRepository from "@/repositories/whatsapp.repository";
 import {
   whatsappWebhookPayloadSchema,
@@ -12,10 +13,6 @@ import type { InboundWhatsAppMessage } from "@/types/whatsapp";
 export type WebhookResult =
   | { ok: true; processed: number; skipped: number }
   | { ok: false; error: string; status: number };
-
-function normalizePhone(phone: string): string {
-  return phone.replace(/[^\d]/g, "");
-}
 
 function extractMessageBody(message: WhatsAppWebhookMessage): string | null {
   if (message.type === "text") {
