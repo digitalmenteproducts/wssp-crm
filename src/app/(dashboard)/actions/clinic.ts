@@ -3,14 +3,35 @@
 import { revalidatePath } from "next/cache";
 
 import { ROUTES } from "@/config/app";
+import {
+  clinicErrorMessage,
+  type ClinicErrorCode,
+} from "@/lib/clinic/errors";
+import { formatAppointmentRange } from "@/lib/clinic/timezone-display";
 import * as appointmentService from "@/services/clinic/appointment.service";
 import * as contactsRepository from "@/repositories/contacts.repository";
 import * as businessService from "@/services/business/business.service";
 
 export type ClinicFormState = {
   error?: string;
+  code?: ClinicErrorCode;
+  field?: string;
   message?: string;
+  summary?: string;
 };
+
+function fromServiceFail(
+  result: Extract<
+    Awaited<ReturnType<typeof appointmentService.createAppointment>>,
+    { ok: false }
+  >,
+): ClinicFormState {
+  return {
+    error: result.error,
+    code: result.code,
+    field: result.field,
+  };
+}
 
 export async function upsertClinicResourceAction(
   _prev: ClinicFormState,
@@ -21,7 +42,7 @@ export async function upsertClinicResourceAction(
     name: String(formData.get("name") ?? ""),
     active: formData.get("active") === "on" || formData.get("active") === "true",
   });
-  if (!result.ok) return { error: result.error };
+  if (!result.ok) return fromServiceFail(result);
   revalidatePath(ROUTES.agenda);
   return { message: result.message };
 }
@@ -41,7 +62,7 @@ export async function upsertClinicAvailabilityAction(
     ) as 15 | 20 | 30 | 45 | 60 | 90 | 120,
     active: formData.get("active") !== "false",
   });
-  if (!result.ok) return { error: result.error };
+  if (!result.ok) return fromServiceFail(result);
   revalidatePath(ROUTES.agenda);
   return { message: result.message };
 }
@@ -53,7 +74,7 @@ export async function deleteClinicAvailabilityAction(
   const result = await appointmentService.deleteAvailability(
     String(formData.get("id") ?? ""),
   );
-  if (!result.ok) return { error: result.error };
+  if (!result.ok) return fromServiceFail(result);
   revalidatePath(ROUTES.agenda);
   return { message: result.message };
 }
@@ -68,7 +89,7 @@ export async function createClinicBlockAction(
     end_at: String(formData.get("end_at") ?? ""),
     reason: String(formData.get("reason") ?? ""),
   });
-  if (!result.ok) return { error: result.error };
+  if (!result.ok) return fromServiceFail(result);
   revalidatePath(ROUTES.agenda);
   return { message: result.message };
 }
@@ -80,7 +101,7 @@ export async function deleteClinicBlockAction(
   const result = await appointmentService.deleteBlock(
     String(formData.get("id") ?? ""),
   );
-  if (!result.ok) return { error: result.error };
+  if (!result.ok) return fromServiceFail(result);
   revalidatePath(ROUTES.agenda);
   return { message: result.message };
 }
@@ -89,34 +110,120 @@ export async function createClinicAppointmentAction(
   _prev: ClinicFormState,
   formData: FormData,
 ): Promise<ClinicFormState> {
+  const contactId = String(formData.get("contact_id") ?? "");
+  const resourceId = String(formData.get("resource_id") ?? "");
+  const serviceName = String(formData.get("service_name") ?? "");
+  const startAt = String(formData.get("start_at") ?? "");
+  const endAt = String(formData.get("end_at") ?? "");
+  const date = String(formData.get("date") ?? "");
+
+  if (!contactId) {
+    return {
+      error: clinicErrorMessage("MISSING_CONTACT"),
+      code: "MISSING_CONTACT",
+      field: "contact_id",
+    };
+  }
+  if (!resourceId) {
+    return {
+      error: clinicErrorMessage("MISSING_RESOURCE"),
+      code: "MISSING_RESOURCE",
+      field: "resource_id",
+    };
+  }
+  if (!serviceName.trim()) {
+    return {
+      error: clinicErrorMessage("MISSING_SERVICE"),
+      code: "MISSING_SERVICE",
+      field: "service_name",
+    };
+  }
+  if (!date) {
+    return {
+      error: clinicErrorMessage("MISSING_DATE"),
+      code: "MISSING_DATE",
+      field: "date",
+    };
+  }
+  if (!startAt || !endAt) {
+    return {
+      error: clinicErrorMessage("MISSING_SLOT"),
+      code: "MISSING_SLOT",
+      field: "slot",
+    };
+  }
+
   const result = await appointmentService.createAppointment({
-    contact_id: String(formData.get("contact_id") ?? ""),
-    resource_id: String(formData.get("resource_id") ?? ""),
-    service_name: String(formData.get("service_name") ?? ""),
+    contact_id: contactId,
+    resource_id: resourceId,
+    service_name: serviceName,
     title: String(formData.get("title") ?? "") || undefined,
-    start_at: String(formData.get("start_at") ?? ""),
-    end_at: String(formData.get("end_at") ?? ""),
+    start_at: startAt,
+    end_at: endAt,
     status: (String(formData.get("status") ?? "confirmed") ||
-      "confirmed") as "pending" | "confirmed" | "completed" | "cancelled" | "no_show",
+      "confirmed") as
+      | "pending"
+      | "confirmed"
+      | "completed"
+      | "cancelled"
+      | "no_show",
     administrative_notes: String(formData.get("administrative_notes") ?? ""),
   });
-  if (!result.ok) return { error: result.error };
+  if (!result.ok) return fromServiceFail(result);
+
+  const workspace = await businessService.getCurrentWorkspace();
+  const timezone =
+    workspace.ok && workspace.workspace
+      ? workspace.workspace.business.timezone
+      : "UTC";
+  const contactName = String(formData.get("contact_label") ?? "Paciente");
+  const resourceName = String(formData.get("resource_label") ?? "Profesional");
+  const summary = `${contactName} · ${resourceName} · ${formatAppointmentRange(
+    startAt,
+    endAt,
+    timezone,
+  )}`;
+
   revalidatePath(ROUTES.agenda);
-  return { message: result.message };
+  return {
+    message: result.message ?? "Cita creada correctamente.",
+    summary,
+  };
 }
 
 export async function updateClinicAppointmentAction(
   _prev: ClinicFormState,
   formData: FormData,
 ): Promise<ClinicFormState> {
+  const startAt = String(formData.get("start_at") ?? "") || undefined;
+  const endAt = String(formData.get("end_at") ?? "") || undefined;
+  const date = String(formData.get("date") ?? "");
+
+  if (formData.has("start_at") || formData.has("date")) {
+    if (!date) {
+      return {
+        error: clinicErrorMessage("MISSING_DATE"),
+        code: "MISSING_DATE",
+        field: "date",
+      };
+    }
+    if (!startAt || !endAt) {
+      return {
+        error: clinicErrorMessage("MISSING_SLOT"),
+        code: "MISSING_SLOT",
+        field: "slot",
+      };
+    }
+  }
+
   const result = await appointmentService.rescheduleAppointment({
     id: String(formData.get("id") ?? ""),
     contact_id: String(formData.get("contact_id") ?? "") || undefined,
     resource_id: String(formData.get("resource_id") ?? "") || undefined,
     service_name: String(formData.get("service_name") ?? "") || undefined,
     title: String(formData.get("title") ?? "") || undefined,
-    start_at: String(formData.get("start_at") ?? "") || undefined,
-    end_at: String(formData.get("end_at") ?? "") || undefined,
+    start_at: startAt,
+    end_at: endAt,
     status: (String(formData.get("status") ?? "") || undefined) as
       | "pending"
       | "confirmed"
@@ -127,7 +234,7 @@ export async function updateClinicAppointmentAction(
     administrative_notes:
       String(formData.get("administrative_notes") ?? "") || undefined,
   });
-  if (!result.ok) return { error: result.error };
+  if (!result.ok) return fromServiceFail(result);
   revalidatePath(ROUTES.agenda);
   return { message: result.message };
 }
@@ -139,9 +246,43 @@ export async function cancelClinicAppointmentAction(
   const result = await appointmentService.cancelAppointment(
     String(formData.get("id") ?? ""),
   );
-  if (!result.ok) return { error: result.error };
+  if (!result.ok) return fromServiceFail(result);
   revalidatePath(ROUTES.agenda);
-  return { message: result.message };
+  return { message: result.message ?? "Cita cancelada correctamente." };
+}
+
+export async function getClinicAvailabilityAction(input: {
+  resource_id: string;
+  date: string;
+}): Promise<
+  | {
+      ok: true;
+      slots: Array<{ start_at: string; end_at: string }>;
+      hasWeeklyForDay: boolean;
+      resourceName: string;
+      durationMinutes: number | null;
+    }
+  | { ok: false; error: string; code?: ClinicErrorCode; field?: string }
+> {
+  const result = await appointmentService.getAvailability({
+    resource_id: input.resource_id,
+    date: input.date,
+  });
+  if (!result.ok) {
+    return {
+      ok: false,
+      error: result.error,
+      code: result.code,
+      field: result.field,
+    };
+  }
+  return {
+    ok: true,
+    slots: result.data.slots,
+    hasWeeklyForDay: result.data.hasWeeklyForDay,
+    resourceName: result.data.resourceName,
+    durationMinutes: result.data.durationMinutes,
+  };
 }
 
 export async function listContactsForAgendaAction(): Promise<
