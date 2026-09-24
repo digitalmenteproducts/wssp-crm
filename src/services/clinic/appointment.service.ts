@@ -686,3 +686,18 @@ export async function getAppointment(
   }
   return { ok: true, data };
 }
+
+/** Trusted (system) API for the AI agent — re-exported as AppointmentService. */
+export {
+  cancelAppointmentTrusted,
+  createAppointmentTrusted,
+  getAppointmentTrusted,
+  getAvailabilityTrusted,
+  listActiveResourcesTrusted,
+  listPatientAppointmentsTrusted,
+  rescheduleAppointmentTrusted,
+  type ClinicTrustedContext,
+  type DisplaySlot,
+  type TrustedActionResult,
+} from "@/services/clinic/appointment-trusted.service";
+

@@ -35,6 +35,8 @@ export type AiAgentSettings = {
   human_handoff_enabled: boolean;
   human_handoff_instructions: string;
   max_failed_attempts: number;
+  /** Independent of `enabled`. Requires industry=clinic to take effect. */
+  clinic_appointment_tools_enabled: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -74,14 +76,20 @@ export type AiAgentReplyResult = {
   confidence: AiAgentConfidence;
 };
 
-/** Abstracción futura para tools (inventario, pedidos, etc.). Sin implementación. */
+/** Abstracción de tools del Agente IA. */
 export type AiAgentToolName =
   | "searchProducts"
   | "checkInventory"
   | "getProductDetails"
   | "createOrder"
   | "createReservation"
-  | "sendPaymentLink";
+  | "sendPaymentLink"
+  | "clinic_list_resources"
+  | "clinic_get_availability"
+  | "clinic_list_my_appointments"
+  | "clinic_create_appointment"
+  | "clinic_reschedule_appointment"
+  | "clinic_cancel_appointment";
 
 export type AiAgentToolDescriptor = {
   name: AiAgentToolName;

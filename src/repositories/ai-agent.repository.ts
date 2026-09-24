@@ -215,6 +215,7 @@ export async function updateConversationAgentState(input: {
   humanHandoffAt?: string | null;
   humanHandoffReason?: string | null;
   agentFailedAttempts?: number;
+  agentMetadata?: Record<string, unknown>;
 }) {
   const supabase = createAdminClient();
   const patch: Record<string, unknown> = {};
@@ -228,6 +229,9 @@ export async function updateConversationAgentState(input: {
   if (input.agentFailedAttempts !== undefined) {
     patch.agent_failed_attempts = input.agentFailedAttempts;
   }
+  if (input.agentMetadata !== undefined) {
+    patch.agent_metadata = input.agentMetadata;
+  }
 
   return supabase
     .from("conversations")
@@ -235,7 +239,7 @@ export async function updateConversationAgentState(input: {
     .eq("id", input.conversationId)
     .eq("business_id", input.businessId)
     .select(
-      "id, agent_paused, human_handoff_at, human_handoff_reason, agent_failed_attempts",
+      "id, agent_paused, human_handoff_at, human_handoff_reason, agent_failed_attempts, agent_metadata",
     )
     .single();
 }
@@ -248,7 +252,7 @@ export async function getConversationAgentStateAdmin(
   return supabase
     .from("conversations")
     .select(
-      "id, agent_paused, human_handoff_at, human_handoff_reason, agent_failed_attempts, contact_id",
+      "id, agent_paused, human_handoff_at, human_handoff_reason, agent_failed_attempts, contact_id, agent_metadata",
     )
     .eq("id", conversationId)
     .eq("business_id", businessId)
@@ -259,5 +263,6 @@ export async function getConversationAgentStateAdmin(
       human_handoff_reason: string | null;
       agent_failed_attempts: number;
       contact_id: string;
+      agent_metadata: Record<string, unknown> | null;
     }>();
 }

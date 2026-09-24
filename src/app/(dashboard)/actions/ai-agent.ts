@@ -44,6 +44,9 @@ export async function saveAiAgentSettingsAction(
       formData.get("human_handoff_instructions") ?? "",
     ),
     max_failed_attempts: Number(formData.get("max_failed_attempts") ?? 2),
+    clinic_appointment_tools_enabled:
+      formData.get("clinic_appointment_tools_enabled") === "on" ||
+      formData.get("clinic_appointment_tools_enabled") === "true",
   });
 
   revalidatePath(ROUTES.agenteIa);

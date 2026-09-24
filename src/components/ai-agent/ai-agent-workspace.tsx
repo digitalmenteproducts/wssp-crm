@@ -272,6 +272,29 @@ export function AiAgentWorkspace({
           </div>
         </div>
 
+        <div className="space-y-3 rounded-lg border border-outline-variant/40 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h3 className="text-base font-semibold">Agenda (Clinic)</h3>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="clinic_appointment_tools_enabled"
+                value="true"
+                defaultChecked={Boolean(
+                  settings.clinic_appointment_tools_enabled,
+                )}
+                disabled={!canEdit}
+                className="size-4"
+              />
+              Habilitar tools de citas
+            </label>
+          </div>
+          <p className="text-xs text-secondary">
+            Independiente del interruptor del Agente. Solo aplica si el negocio
+            tiene industry = clinic. Por defecto desactivado.
+          </p>
+        </div>
+
         {saveState.error ? (
           <p className="text-sm text-destructive" role="alert">
             {saveState.error}

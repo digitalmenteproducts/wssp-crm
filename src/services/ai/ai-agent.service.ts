@@ -23,15 +23,23 @@ import {
 import {
   estimateOpenAiCostUsd,
   generateAgentReplyWithOpenAI,
+  generateAgentReplyWithTools,
   getAgentModel,
   getCentralOpenAiApiKey,
 } from "@/services/openai/agent-reply.service";
+import {
+  clinicAppointmentToolsAllowed,
+  executeClinicAppointmentTool,
+  getClinicAppointmentToolDefinitions,
+} from "@/services/ai/clinic-appointment-tools";
+import { parseAgentMetadata } from "@/lib/ai/appointment-intent";
 import { sendWhatsAppTextMessage } from "@/services/whatsapp/send-text.service";
 import type {
   AiAgentReplyResult,
   AiAgentSettings,
   AiKnowledgeEntry,
 } from "@/types/ai-agent";
+import type { BusinessIndustry } from "@/types/business";
 
 const CONTEXT_MESSAGE_LIMIT = 16;
 
@@ -57,6 +65,7 @@ function defaultSettings(businessId: string, businessName: string): AiAgentSetti
     human_handoff_instructions:
       "Transfiere si el cliente pide una persona, si hay un reclamo/devolución compleja, o si no hay información suficiente en la base de conocimiento.",
     max_failed_attempts: 2,
+    clinic_appointment_tools_enabled: false,
     created_at: now,
     updated_at: now,
   };
@@ -169,6 +178,8 @@ export async function saveAiAgentSettingsForCurrentBusiness(
       human_handoff_enabled: parsed.data.human_handoff_enabled,
       human_handoff_instructions: parsed.data.human_handoff_instructions.trim(),
       max_failed_attempts: parsed.data.max_failed_attempts,
+      clinic_appointment_tools_enabled:
+        parsed.data.clinic_appointment_tools_enabled,
     },
   );
 
@@ -247,6 +258,38 @@ export async function deleteKnowledgeForCurrentBusiness(
   return { ok: true, message: "Entrada eliminada." };
 }
 
+async function loadBusinessContext(businessId: string): Promise<{
+  industry: BusinessIndustry | string;
+  timezone: string;
+  name: string;
+} | null> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("businesses")
+    .select("industry, timezone, name")
+    .eq("id", businessId)
+    .maybeSingle<{
+      industry: string | null;
+      timezone: string;
+      name: string;
+    }>();
+  if (!data) return null;
+  return {
+    industry: data.industry ?? "other",
+    timezone: data.timezone || "UTC",
+    name: data.name,
+  };
+}
+
+function normalizeSettings(settings: AiAgentSettings): AiAgentSettings {
+  return {
+    ...settings,
+    clinic_appointment_tools_enabled: Boolean(
+      settings.clinic_appointment_tools_enabled,
+    ),
+  };
+}
+
 async function runAgentGeneration(input: {
   businessId: string;
   settings: AiAgentSettings;
@@ -254,6 +297,8 @@ async function runAgentGeneration(input: {
   history: Array<{ role: "user" | "assistant"; content: string }>;
   conversationId?: string | null;
   sourceMessageId?: string | null;
+  contactId?: string | null;
+  agentMetadata?: Record<string, unknown> | null;
 }): Promise<
   | {
       ok: true;
@@ -270,6 +315,12 @@ async function runAgentGeneration(input: {
     };
   }
 
+  const settings = normalizeSettings(input.settings);
+  const businessCtx = await loadBusinessContext(input.businessId);
+  if (!businessCtx) {
+    return { ok: false, error: "Empresa no encontrada." };
+  }
+
   const { data: knowledgeRows } =
     await aiAgentRepository.listKnowledgeEntriesAdmin(input.businessId, {
       enabledOnly: true,
@@ -283,7 +334,6 @@ async function runAgentGeneration(input: {
   );
   let ranked = rankedDetailed.map((item) => item.entry);
 
-  // Contexto suave: si no hubo match, aportar entradas ancla (horario/ubicación/general).
   if (ranked.length === 0 && (knowledgeRows?.length ?? 0) > 0) {
     const preferred = (knowledgeRows ?? []).filter((entry) => {
       const title = normalizeText(entry.title);
@@ -316,21 +366,77 @@ async function runAgentGeneration(input: {
     knowledge_count_available: knowledgeRows?.length ?? 0,
   });
 
+  const clinicToolsEnabled = clinicAppointmentToolsAllowed({
+    industry: businessCtx.industry,
+    clinicAppointmentToolsEnabled: settings.clinic_appointment_tools_enabled,
+  });
+
   const systemPrompt = buildAgentSystemPrompt({
-    settings: input.settings,
+    settings,
     knowledgeBlock: formatKnowledgeForPrompt(ranked),
+    clinicToolsEnabled,
+    timezone: businessCtx.timezone,
   });
 
   const model = getAgentModel();
-  const generated = await generateAgentReplyWithOpenAI({
-    apiKey,
-    model,
-    systemPrompt,
-    messages: [
-      ...input.history,
-      { role: "user", content: input.userMessage },
-    ],
-  });
+  let generated:
+    | {
+        ok: true;
+        result: AiAgentReplyResult;
+        inputTokens: number | null;
+        outputTokens: number | null;
+        totalTokens: number | null;
+      }
+    | { ok: false; error: string };
+
+  if (clinicToolsEnabled && input.contactId) {
+    let metadata = parseAgentMetadata(input.agentMetadata);
+    generated = await generateAgentReplyWithTools({
+      apiKey,
+      model,
+      systemPrompt,
+      messages: [
+        ...input.history,
+        { role: "user", content: input.userMessage },
+      ],
+      tools: getClinicAppointmentToolDefinitions(),
+      executeTool: async (name, argsJson) => {
+        const exec = await executeClinicAppointmentTool(name, argsJson, {
+          trusted: {
+            businessId: input.businessId,
+            timezone: businessCtx.timezone,
+            contactId: input.contactId!,
+          },
+          industry: businessCtx.industry,
+          clinicAppointmentToolsEnabled:
+            settings.clinic_appointment_tools_enabled,
+          latestUserMessage: input.userMessage,
+          metadata,
+          onMetadataChange: (next) => {
+            metadata = next;
+          },
+        });
+        if (input.conversationId) {
+          await aiAgentRepository.updateConversationAgentState({
+            conversationId: input.conversationId,
+            businessId: input.businessId,
+            agentMetadata: metadata as unknown as Record<string, unknown>,
+          });
+        }
+        return exec.result;
+      },
+    });
+  } else {
+    generated = await generateAgentReplyWithOpenAI({
+      apiKey,
+      model,
+      systemPrompt,
+      messages: [
+        ...input.history,
+        { role: "user", content: input.userMessage },
+      ],
+    });
+  }
 
   if (!generated.ok) {
     return generated;
@@ -350,7 +456,7 @@ async function runAgentGeneration(input: {
     shouldForceHandoff({
       result,
       userMessage: input.userMessage,
-      handoffEnabled: input.settings.human_handoff_enabled,
+      handoffEnabled: settings.human_handoff_enabled,
     })
   ) {
     result = {
@@ -502,6 +608,8 @@ export async function processIncomingMessageWithAgent(input: {
     history,
     conversationId: input.conversationId,
     sourceMessageId: input.inboundMessageId,
+    contactId: input.contactId,
+    agentMetadata: conversation.agent_metadata,
   });
 
   if (!generated.ok) {
@@ -603,6 +711,70 @@ export async function processIncomingMessageWithAgent(input: {
   });
 
   return { ok: true, skipped: false, handoff: false, replied: true };
+}
+
+/**
+ * Simula un turno del agente SIN enviar WhatsApp.
+ * Respeta enabled + clinic tools flags. Para harness de pruebas.
+ */
+export async function simulateAgentTurnWithoutWhatsApp(input: {
+  businessId: string;
+  contactId: string;
+  message: string;
+  conversationId?: string | null;
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
+}): Promise<
+  | {
+      ok: true;
+      result: AiAgentReplyResult;
+      model: string;
+      clinicToolsEligible: boolean;
+    }
+  | { ok: false; error: string }
+> {
+  const { data: settingsRow, error } =
+    await aiAgentRepository.getAiAgentSettingsAdmin(input.businessId);
+  if (error) return { ok: false, error: error.message };
+
+  const businessCtx = await loadBusinessContext(input.businessId);
+  if (!businessCtx) return { ok: false, error: "Empresa no encontrada." };
+
+  const settings =
+    settingsRow ?? defaultSettings(input.businessId, businessCtx.name);
+
+  let agentMetadata: Record<string, unknown> | null = null;
+  if (input.conversationId) {
+    const { data: conv } =
+      await aiAgentRepository.getConversationAgentStateAdmin(
+        input.conversationId,
+        input.businessId,
+      );
+    agentMetadata = conv?.agent_metadata ?? null;
+  }
+
+  const generated = await runAgentGeneration({
+    businessId: input.businessId,
+    settings,
+    userMessage: input.message.trim(),
+    history: input.history ?? [],
+    conversationId: input.conversationId,
+    contactId: input.contactId,
+    agentMetadata,
+  });
+
+  if (!generated.ok) return generated;
+
+  return {
+    ok: true,
+    result: generated.result,
+    model: generated.model,
+    clinicToolsEligible: clinicAppointmentToolsAllowed({
+      industry: businessCtx.industry,
+      clinicAppointmentToolsEnabled: Boolean(
+        settings.clinic_appointment_tools_enabled,
+      ),
+    }),
+  };
 }
 
 async function loadContactPhone(

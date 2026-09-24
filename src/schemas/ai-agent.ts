@@ -42,6 +42,7 @@ export const updateAiAgentSettingsSchema = z.object({
   human_handoff_enabled: z.boolean(),
   human_handoff_instructions: z.string().max(4000).default(""),
   max_failed_attempts: z.coerce.number().int().min(1).max(10),
+  clinic_appointment_tools_enabled: z.boolean().default(false),
 });
 
 export const upsertKnowledgeEntrySchema = z.object({
