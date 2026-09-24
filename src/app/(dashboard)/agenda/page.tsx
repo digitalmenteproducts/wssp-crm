@@ -7,6 +7,7 @@ import { ROUTES } from "@/config/app";
 import { hasClinicAgenda } from "@/lib/industry";
 import * as contactsRepository from "@/repositories/contacts.repository";
 import * as appointmentService from "@/services/clinic/appointment.service";
+import * as clinicServicesService from "@/services/clinic/services.service";
 import * as businessService from "@/services/business/business.service";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +30,10 @@ export default async function AgendaPage() {
     redirect(ROUTES.panel);
   }
 
-  const agenda = await appointmentService.getAgendaPageData();
+  const [agenda, servicesPage] = await Promise.all([
+    appointmentService.getAgendaPageData(),
+    clinicServicesService.listServicesPageData(),
+  ]);
   const contacts = await contactsRepository.listContactsSimple(
     workspace.workspace.business.id,
   );
@@ -48,6 +52,7 @@ export default async function AgendaPage() {
       ) : (
         <ClinicAgendaWorkspace
           resources={agenda.data.resources}
+          services={servicesPage.ok ? servicesPage.data.services : []}
           availability={agenda.data.availability}
           blocks={agenda.data.blocks}
           appointments={agenda.data.appointments}

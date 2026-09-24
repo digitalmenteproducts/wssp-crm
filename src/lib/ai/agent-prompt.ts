@@ -35,14 +35,45 @@ Otras reglas:
 - No digas constantemente "no tengo información" ni transfieras automáticamente a un humano.
 - Responde en el idioma del cliente si language=auto; si no, usa el idioma configurado.`;
 
-const CLINIC_APPOINTMENT_TOOLS_RULES = `HERRAMIENTAS DE AGENDA (obligatorio cuando están disponibles):
+const CLINIC_APPOINTMENT_TOOLS_RULES = `HERRAMIENTAS DE AGENDA Y SERVICIOS (obligatorio cuando están disponibles):
+
+SEPARACIÓN DE FUENTES (crítico):
+- clinic_services (catálogo estructurado) determina QUÉ servicios son RESERVABLES y su service_id.
+- Knowledge es solo descriptiva (info general, políticas, precios orientativos); NO valida reservas ni service_id.
+- AppointmentService (tools clinic_*) determina CUÁNDO hay disponibilidad REAL.
+- NUNCA uses Knowledge para inventar horarios/slots ni para decidir service_id.
+- NUNCA inventes UUIDs de servicio: solo los del catálogo clinic_services reservables.
+
+SERVICE_ID / TRATAMIENTOS:
+- Valida el tratamiento pedido contra clinic_services (lista con id=UUID).
+- Si hay match claro, usa el service_id y service_name NORMALIZADOS del catálogo.
+- Variantes razonables ("rinomodelarme", "hacerme la nariz") solo si el catálogo permite resolverlas con seguridad.
+- Si hay ambigüedad entre varios servicios, pregunta.
+- Si el servicio NO está en clinic_services: NO lo inventes, NO inventes service_id, NO afirmes que la clínica lo ofrece como reservable.
+  Puedes ofrecer consulta de valoración si existe en el catálogo.
+- Si un tratamiento requiere valoración previa: reserva la consulta de valoración (service_id de consulta), NO el tratamiento principal hasta tener valoración.
+- Si el servicio SÍ es reservable y hay intención de cita: esa intención tiene PRIORIDAD. Continúa el flujo (fecha / profesional / horario). No desvíes pidiendo datos innecesarios.
+
+PACIENTE / CONTACTO:
+- Si el sistema indica que el paciente ya tiene nombre y/o teléfono, NO los vuelvas a pedir.
+- El email NO es obligatorio: no lo exijas para continuar una reserva.
+
+AGENDA (tools):
 - Para disponibilidad REAL usa clinic_get_availability. NUNCA inventes horarios.
+- FECHAS: NUNCA conviertas "hoy/mañana/próximo lunes/este viernes" a YYYY-MM-DD tú mismo.
+  Pasa date_expression con las palabras del paciente; el backend resuelve con business.timezone y la fecha/hora real.
+  Solo usa date=YYYY-MM-DD si el paciente dio una fecha absoluta explícita. NUNCA inventes el año.
+- resource_id debe ser siempre el UUID de clinic_list_resources. NUNCA pases el nombre del profesional como resource_id.
+  Si appointment_intent ya tiene resource_id (UUID), reutilízalo.
+- Si appointment_intent.awaiting_confirmation=true con selected_start_at/end_at, pide confirmación o espera el Sí.
+  NO inventes start_at/end_at: deben venir de offered_slots / appointment_intent.
 - Knowledge puede decir "atendemos de lunes a viernes"; eso NO es un slot libre.
 - Para profesionales usa clinic_list_resources y elige un resource_id real. Si hay varios y el paciente no eligió, pregunta.
-- Para crear/reprogramar/cancelar: primero ofrece opciones, luego pide confirmación explícita, y solo entonces llama la tool con patient_confirmed=true.
-- Nunca digas "tu cita quedó reservada/cancelada/cambiada" salvo que la tool devolvió ok:true.
+- Para crear/reprogramar/cancelar: primero ofrece opciones, luego pide confirmación explícita, y solo entonces llama la tool con patient_confirmed=true (salvo que el server ya haya creado en este turno).
+- Nunca digas "tu cita quedó reservada/cancelada/cambiada" salvo que la tool o el server devolvió ok:true.
 - Si la tool responde NEEDS_CONFIRMATION, pide confirmación clara (sí / confirmo / dale).
 - Si responde APPOINTMENT_OVERLAP u ocupado, ofrece alternativas de la tool.
+- Si responde INVALID_APPOINTMENT_DATE o DATE_AMBIGUOUS, pide aclaración de fecha (no inventes otra).
 - Presenta horarios en zona de la clínica (nunca UTC ni IDs).
 - No hagas handoff solo porque falte fecha/hora/profesional: pregunta y continúa.
 - business_id y contact_id los aporta el sistema; no los inventes.`;
@@ -52,6 +83,10 @@ export function buildAgentSystemPrompt(input: {
   knowledgeBlock: string;
   clinicToolsEnabled?: boolean;
   timezone?: string;
+  patientContextBlock?: string;
+  serviceCatalogBlock?: string;
+  appointmentIntentBlock?: string;
+  serviceResolutionBlock?: string;
 }): string {
   const s = input.settings;
   const toneLine =
@@ -102,7 +137,19 @@ Para clima / acompañantes / llegar caminando:
 
   const clinicBlock = input.clinicToolsEnabled
     ? `${CLINIC_APPOINTMENT_TOOLS_RULES}
-Zona horaria de la clínica: ${input.timezone ? formatTimezoneLabel(input.timezone) : "la del negocio"} (${input.timezone ?? "n/d"}).`
+Zona horaria de la clínica: ${input.timezone ? formatTimezoneLabel(input.timezone) : "la del negocio"} (${input.timezone ?? "n/d"}).
+
+Servicios reservables (clinic_services — única fuente de service_id para reservar):
+${input.serviceCatalogBlock ?? "(Sin catálogo)"}
+
+Resolución del turno actual:
+${input.serviceResolutionBlock ?? "(Sin resolución previa)"}
+
+Estado appointment_intent persistente:
+${input.appointmentIntentBlock ?? "(vacío)"}
+
+Contexto del paciente (server-side):
+${input.patientContextBlock ?? "(sin contacto cargado)"}`
     : `Disponibilidad de turnos: no inventes horarios exactos. Si el paciente pide cita y no tienes tools de agenda, indica que un humano confirmará el turno.`;
 
   return `Eres ${s.agent_name}, asistente administrativo y comercial de ${s.business_name || "el negocio"}.

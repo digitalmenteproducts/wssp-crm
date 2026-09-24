@@ -50,6 +50,8 @@ export type ClinicAppointment = {
   resource_id: string;
   title: string;
   service_name: string;
+  /** Nullable for legacy appointments created before clinic_services. */
+  service_id: string | null;
   start_at: string;
   end_at: string;
   status: ClinicAppointmentStatus;
@@ -57,6 +59,45 @@ export type ClinicAppointment = {
   administrative_notes: string;
   created_at: string;
   updated_at: string;
+};
+
+export type ClinicService = {
+  id: string;
+  business_id: string;
+  name: string;
+  duration_minutes: number;
+  requires_initial_consultation: boolean;
+  initial_consultation_service_id: string | null;
+  use_specific_availability: boolean;
+  active: boolean;
+  admin_notes: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ClinicServiceResource = {
+  id: string;
+  business_id: string;
+  service_id: string;
+  resource_id: string;
+  created_at: string;
+};
+
+export type ClinicServiceAvailability = {
+  id: string;
+  business_id: string;
+  service_id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ClinicServiceListItem = ClinicService & {
+  resource_ids: string[];
+  resource_names: string[];
 };
 
 export type ClinicAppointmentListItem = ClinicAppointment & {

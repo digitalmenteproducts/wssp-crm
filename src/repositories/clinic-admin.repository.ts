@@ -5,6 +5,9 @@ import type {
   ClinicAvailability,
   ClinicCalendarResource,
   ClinicScheduleBlock,
+  ClinicService,
+  ClinicServiceAvailability,
+  ClinicServiceResource,
 } from "@/types/clinic";
 
 /** Admin client helpers for webhook/agent paths (bypass session RLS). */
@@ -153,6 +156,7 @@ export async function updateAppointmentAdmin(
       | "resource_id"
       | "title"
       | "service_name"
+      | "service_id"
       | "start_at"
       | "end_at"
       | "status"
@@ -168,4 +172,55 @@ export async function updateAppointmentAdmin(
     .eq("id", appointmentId)
     .select("*")
     .single<ClinicAppointment>();
+}
+
+// ---------------------------------------------------------------------------
+// clinic_services (admin / AI path)
+// ---------------------------------------------------------------------------
+
+export async function listServicesAdmin(businessId: string) {
+  const supabase = createAdminClient();
+  return supabase
+    .from("clinic_services")
+    .select("*")
+    .eq("business_id", businessId)
+    .order("name", { ascending: true })
+    .returns<ClinicService[]>();
+}
+
+export async function getServiceAdmin(businessId: string, serviceId: string) {
+  const supabase = createAdminClient();
+  return supabase
+    .from("clinic_services")
+    .select("*")
+    .eq("business_id", businessId)
+    .eq("id", serviceId)
+    .maybeSingle<ClinicService>();
+}
+
+export async function listServiceResourceLinksAdmin(
+  businessId: string,
+  serviceId?: string,
+) {
+  const supabase = createAdminClient();
+  let q = supabase
+    .from("clinic_service_resources")
+    .select("*")
+    .eq("business_id", businessId);
+  if (serviceId) q = q.eq("service_id", serviceId);
+  return q.returns<ClinicServiceResource[]>();
+}
+
+export async function listServiceAvailabilityAdmin(
+  businessId: string,
+  serviceId: string,
+) {
+  const supabase = createAdminClient();
+  return supabase
+    .from("clinic_service_availability")
+    .select("*")
+    .eq("business_id", businessId)
+    .eq("service_id", serviceId)
+    .order("day_of_week", { ascending: true })
+    .returns<ClinicServiceAvailability[]>();
 }

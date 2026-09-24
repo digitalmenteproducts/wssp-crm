@@ -8,6 +8,10 @@ export const CLINIC_ERROR_CODES = [
   "INVALID_TIME_ORDER",
   "RESOURCE_INACTIVE",
   "RESOURCE_NOT_FOUND",
+  "SERVICE_NOT_FOUND",
+  "SERVICE_INACTIVE",
+  "SERVICE_REQUIRES_CONSULTATION",
+  "RESOURCE_NOT_COMPATIBLE",
   "NO_WEEKLY_AVAILABILITY",
   "OUTSIDE_AVAILABILITY",
   "SCHEDULE_BLOCKED",
@@ -29,6 +33,12 @@ export const CLINIC_ERROR_MESSAGES: Record<ClinicErrorCode, string> = {
     "La hora de finalización debe ser posterior a la hora de inicio.",
   RESOURCE_INACTIVE: "Este profesional no está disponible actualmente.",
   RESOURCE_NOT_FOUND: "Profesional no encontrado.",
+  SERVICE_NOT_FOUND: "Servicio no encontrado.",
+  SERVICE_INACTIVE: "Este servicio no está disponible actualmente.",
+  SERVICE_REQUIRES_CONSULTATION:
+    "Este tratamiento requiere primero una consulta de valoración.",
+  RESOURCE_NOT_COMPATIBLE:
+    "Este profesional no realiza el servicio seleccionado.",
   NO_WEEKLY_AVAILABILITY:
     "Este profesional no tiene disponibilidad configurada para este día.",
   OUTSIDE_AVAILABILITY:

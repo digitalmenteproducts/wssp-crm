@@ -1,11 +1,19 @@
 import {
-  buildAppointmentIntent,
   clearAppointmentIntent,
+  mergeAppointmentIntent,
   type AgentConversationMetadata,
   type AppointmentIntentState,
 } from "@/lib/ai/appointment-intent";
 import { isAffirmativeConfirmation } from "@/lib/ai/confirmation";
-import { resolveRelativeDate } from "@/lib/ai/relative-dates";
+import { resolveAppointmentDateInput } from "@/lib/ai/relative-dates";
+import {
+  type ClinicServiceCatalogItem,
+  isKnownClinicServiceId,
+} from "@/lib/ai/resolve-clinic-service";
+import {
+  resolveResourceIdFromArgs,
+  slotMatchesOffered,
+} from "@/lib/ai/offered-slot-selection";
 import {
   formatAppointmentRange,
   formatTimezoneLabel,
@@ -53,7 +61,7 @@ export function getClinicAppointmentToolDefinitions() {
       function: {
         name: "clinic_get_availability",
         description:
-          "Consulta horarios REALES disponibles. Nunca inventes disponibilidad: usa solo el resultado de esta tool. No requiere confirmación del paciente.",
+          "Consulta horarios REALES disponibles. Nunca inventes disponibilidad ni YYYY-MM-DD. Para fechas relativas (hoy, mañana, el próximo lunes) SIEMPRE pasa date_expression con las palabras del paciente; el backend las resuelve con business.timezone. Solo usa date (YYYY-MM-DD) si el paciente dio una fecha absoluta explícita. No requiere confirmación del paciente.",
         parameters: {
           type: "object",
           properties: {
@@ -61,18 +69,28 @@ export function getClinicAppointmentToolDefinitions() {
               type: "string",
               description: "UUID del profesional (clinic_calendar_resources.id).",
             },
+            date_expression: {
+              type: "string",
+              description:
+                "Frase temporal del paciente sin convertir a calendario (ej. 'el próximo lunes', 'mañana', 'este viernes'). Preferido para relativos.",
+            },
             date: {
               type: "string",
               description:
-                "Fecha YYYY-MM-DD o expresión relativa (hoy, mañana, lunes, este viernes).",
+                "Solo YYYY-MM-DD si el paciente indicó una fecha absoluta. NUNCA inventes el año ni conviertas 'próximo lunes' a YYYY-MM-DD.",
             },
             time_preference: {
               type: "string",
               enum: ["morning", "afternoon", "evening"],
               description: "Filtro opcional de franja.",
             },
+            service_id: {
+              type: "string",
+              description:
+                "UUID del servicio en clinic_services. Reutiliza appointment_intent.service_id si ya está resuelto.",
+            },
           },
-          required: ["resource_id", "date"],
+          required: ["resource_id"],
           additionalProperties: false,
         },
       },
@@ -96,7 +114,16 @@ export function getClinicAppointmentToolDefinitions() {
           type: "object",
           properties: {
             resource_id: { type: "string" },
-            service_name: { type: "string" },
+            service_id: {
+              type: "string",
+              description:
+                "UUID del servicio reservable en clinic_services (obligatorio). Debe coincidir con el catálogo; reutiliza appointment_intent.service_id.",
+            },
+            service_name: {
+              type: "string",
+              description:
+                "Nombre del servicio (opcional si service_id ya está en appointment_intent). Debe coincidir con el catálogo.",
+            },
             start_at: {
               type: "string",
               description: "ISO start_at exacto de un slot de clinic_get_availability.",
@@ -112,7 +139,7 @@ export function getClinicAppointmentToolDefinitions() {
           },
           required: [
             "resource_id",
-            "service_name",
+            "service_id",
             "start_at",
             "end_at",
             "patient_confirmed",
@@ -168,6 +195,10 @@ export type ClinicToolExecutionContext = {
   latestUserMessage: string;
   metadata: AgentConversationMetadata;
   onMetadataChange: (meta: AgentConversationMetadata) => void;
+  /** Servicios activos de clinic_services (fuente de verdad para reservar). */
+  serviceCatalog: ClinicServiceCatalogItem[];
+  /** Injectable for deterministic tests; defaults to real now. */
+  now?: Date;
 };
 
 export type ClinicToolExecutionResult = {
@@ -186,13 +217,98 @@ function asRecord(args: string): Record<string, unknown> {
   }
 }
 
+function findCatalogItemByIdOrName(
+  catalog: ClinicServiceCatalogItem[],
+  serviceId: string | null,
+  serviceName: string | null,
+): ClinicServiceCatalogItem | null {
+  if (serviceId) {
+    const byId = catalog.find((c) => c.id === serviceId && c.active);
+    if (byId) return byId;
+  }
+  const name = serviceName?.trim();
+  if (!name) return null;
+  return (
+    catalog.find(
+      (c) =>
+        c.active &&
+        (c.name.localeCompare(name, "es", { sensitivity: "accent" }) === 0 ||
+          c.name.toLowerCase() === name.toLowerCase()),
+    ) ?? null
+  );
+}
+
+function resolveBookableServiceForTool(input: {
+  argServiceId: string | null;
+  argServiceName: string | null;
+  intent: AppointmentIntentState | undefined;
+  catalog: ClinicServiceCatalogItem[];
+}):
+  | { ok: true; service_id: string; service_name: string }
+  | {
+      ok: false;
+      code: string;
+      error: string;
+      catalog?: ClinicServiceCatalogItem[];
+    } {
+  const intentId = input.intent?.service_id?.trim() ?? null;
+  const intentName = input.intent?.service_name?.trim() ?? null;
+  const rawId = input.argServiceId?.trim() || intentId;
+  const rawName = input.argServiceName?.trim() || intentName;
+
+  if (rawId && !isKnownClinicServiceId(rawId, input.catalog)) {
+    const inactive = input.catalog.find((c) => c.id === rawId);
+    if (inactive && !inactive.active) {
+      return {
+        ok: false,
+        code: "SERVICE_INACTIVE",
+        error: "El servicio no está activo para reservas.",
+      };
+    }
+    return {
+      ok: false,
+      code: "SERVICE_NOT_FOUND",
+      error:
+        "service_id no está en clinic_services. NO inventes UUIDs. Usa un id del catálogo o pide aclarar el tratamiento.",
+      catalog: input.catalog.filter((c) => c.active),
+    };
+  }
+
+  const item =
+    (rawId ? input.catalog.find((c) => c.id === rawId && c.active) : null) ??
+    findCatalogItemByIdOrName(input.catalog, null, rawName);
+
+  if (!item) {
+    return {
+      ok: false,
+      code: "SERVICE_NOT_FOUND",
+      error:
+        "Falta service_id válido de clinic_services. NO inventes servicios. Ofrece consulta de valoración si aplica.",
+      catalog: input.catalog.filter((c) => c.active),
+    };
+  }
+
+  if (item.requires_initial_consultation) {
+    return {
+      ok: false,
+      code: "SERVICE_REQUIRES_CONSULTATION",
+      error: `El servicio "${item.name}" requiere consulta de valoración previa. Reserva la consulta inicial (service_id de valoración), no este tratamiento.`,
+    };
+  }
+
+  return { ok: true, service_id: item.id, service_name: item.name };
+}
+
 function setIntent(
   ctx: ClinicToolExecutionContext,
-  intent: AppointmentIntentState,
+  patch: Partial<AppointmentIntentState> & {
+    action: AppointmentIntentState["action"];
+  },
 ) {
+  const prev = ctx.metadata.appointment_intent;
   ctx.onMetadataChange({
     ...ctx.metadata,
-    appointment_intent: intent,
+    appointment_intent: mergeAppointmentIntent(prev, patch),
   });
 }
 
@@ -241,9 +357,14 @@ export async function executeClinicAppointmentTool(
   try {
     switch (name) {
       case "clinic_list_resources": {
-        const res = await appointmentService.listActiveResourcesTrusted(
-          ctx.trusted,
-        );
+        const intentServiceId = ctx.metadata.appointment_intent?.service_id;
+        const res =
+          intentServiceId && isKnownClinicServiceId(intentServiceId, ctx.serviceCatalog)
+            ? await appointmentService.listCompatibleResourcesTrusted(
+                ctx.trusted,
+                intentServiceId,
+              )
+            : await appointmentService.listActiveResourcesTrusted(ctx.trusted);
         payload = res.ok
           ? {
               ok: true,
@@ -255,56 +376,98 @@ export async function executeClinicAppointmentTool(
         break;
       }
       case "clinic_get_availability": {
-        const resourceId = String(args.resource_id ?? "");
-        const dateRaw = String(args.date ?? "");
-        const date =
-          resolveRelativeDate(dateRaw, ctx.trusted.timezone) ??
-          (/^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : null);
-        if (!resourceId) {
+        const resourceResolved = resolveResourceIdFromArgs({
+          argResourceId:
+            typeof args.resource_id === "string" ? args.resource_id : null,
+          intent: ctx.metadata.appointment_intent,
+        });
+        const dateExpression =
+          typeof args.date_expression === "string"
+            ? args.date_expression
+            : null;
+        const dateArg = typeof args.date === "string" ? args.date : null;
+
+        if (!resourceResolved.ok) {
           payload = {
             ok: false,
-            code: "MISSING_RESOURCE",
-            error: "Falta resource_id.",
+            code: resourceResolved.code,
+            error: resourceResolved.error,
           };
           break;
         }
-        if (!date) {
+        const resourceId = resourceResolved.resource_id;
+
+        const resolved = resolveAppointmentDateInput({
+          date: dateArg,
+          date_expression: dateExpression,
+          latestUserMessage: ctx.latestUserMessage,
+          timeZone: ctx.trusted.timezone,
+          now: ctx.now,
+        });
+
+        if (!resolved.ok) {
           payload = {
             ok: false,
-            code: "AMBIGUOUS_DATE",
-            error:
-              "No pude interpretar la fecha. Pide al paciente un día concreto (ej. lunes o 2026-09-28).",
+            code: resolved.code,
+            error: resolved.error,
           };
           break;
         }
+
+        const date = resolved.date;
         const pref = args.time_preference;
         const time_preference =
           pref === "morning" || pref === "afternoon" || pref === "evening"
             ? pref
             : null;
+
+        const serviceResolved = resolveBookableServiceForTool({
+          argServiceId:
+            typeof args.service_id === "string" ? args.service_id : null,
+          argServiceName: null,
+          intent: ctx.metadata.appointment_intent,
+          catalog: ctx.serviceCatalog,
+        });
+        if (!serviceResolved.ok) {
+          payload = {
+            ok: false,
+            code: serviceResolved.code,
+            error: serviceResolved.error,
+            ...(serviceResolved.catalog
+              ? { catalog: serviceResolved.catalog }
+              : {}),
+          };
+          break;
+        }
+
         const res = await appointmentService.getAvailabilityTrusted(ctx.trusted, {
           resource_id: resourceId,
           date,
           time_preference,
+          service_id: serviceResolved.service_id,
         });
         if (!res.ok) {
           payload = { ok: false, code: res.code, error: res.error };
           break;
         }
-        setIntent(
-          ctx,
-          buildAppointmentIntent({
-            action: "get_availability",
-            resource_id: resourceId,
-            resource_name: res.data.resourceName,
-            requested_date: date,
-            offered_slots: res.data.slots,
-            awaiting_confirmation: false,
-          }),
-        );
+        setIntent(ctx, {
+          action: "get_availability",
+          resource_id: resourceId,
+          resource_name: res.data.resourceName,
+          service_id: serviceResolved.service_id,
+          service_name: serviceResolved.service_name,
+          requested_date: date,
+          offered_slots: res.data.slots,
+          awaiting_confirmation: false,
+          selected_start_at: undefined,
+          selected_end_at: undefined,
+        });
         payload = {
           ok: true,
           date,
+          date_source: resolved.source,
+          date_expression_used: resolved.expression,
+          resource_id: resourceId,
           resource_name: res.data.resourceName,
           has_weekly_for_day: res.data.hasWeeklyForDay,
           duration_minutes: res.data.durationMinutes,
@@ -349,23 +512,84 @@ export async function executeClinicAppointmentTool(
         const confirmed =
           patientConfirmed &&
           isAffirmativeConfirmation(ctx.latestUserMessage);
-        const resource_id = String(args.resource_id ?? "");
-        const service_name = String(args.service_name ?? "");
-        const start_at = String(args.start_at ?? "");
-        const end_at = String(args.end_at ?? "");
+        const intent = ctx.metadata.appointment_intent;
+
+        const resourceResolved = resolveResourceIdFromArgs({
+          argResourceId:
+            typeof args.resource_id === "string" ? args.resource_id : null,
+          intent,
+        });
+        if (!resourceResolved.ok) {
+          payload = {
+            ok: false,
+            code: resourceResolved.code,
+            error: resourceResolved.error,
+          };
+          break;
+        }
+        const resource_id = resourceResolved.resource_id;
+
+        // start/end: SOLO from persisted offered slot or args that match offered_slots.
+        const intentStart = intent?.selected_start_at?.trim() ?? "";
+        const intentEnd = intent?.selected_end_at?.trim() ?? "";
+        const argStart = String(args.start_at ?? "").trim();
+        const argEnd = String(args.end_at ?? "").trim();
+
+        const start_at = intentStart || argStart;
+        const end_at = intentEnd || argEnd;
+
+        if (intent?.offered_slots?.length) {
+          if (!slotMatchesOffered(start_at, end_at, intent.offered_slots)) {
+            // Prefer exact match from args display if args don't match — reject inventados.
+            payload = {
+              ok: false,
+              code: "SLOT_NOT_OFFERED",
+              error:
+                "start_at/end_at deben coincidir exactamente con un offered_slot previo. NO inventes horarios. Usa selected_start_at/end_at del appointment_intent o un slot de la lista.",
+              offered_slots: intent.offered_slots,
+            };
+            break;
+          }
+        } else if (!start_at || !end_at) {
+          payload = {
+            ok: false,
+            code: "MISSING_SLOT",
+            error: "Faltan start_at/end_at y no hay slot seleccionado en appointment_intent.",
+          };
+          break;
+        }
+
+        const serviceResolved = resolveBookableServiceForTool({
+          argServiceId:
+            typeof args.service_id === "string" ? args.service_id : null,
+          argServiceName:
+            typeof args.service_name === "string" ? args.service_name : null,
+          intent,
+          catalog: ctx.serviceCatalog,
+        });
+        if (!serviceResolved.ok) {
+          payload = {
+            ok: false,
+            code: serviceResolved.code,
+            error: serviceResolved.error,
+            ...(serviceResolved.catalog
+              ? { catalog: serviceResolved.catalog }
+              : {}),
+          };
+          break;
+        }
+        const { service_id, service_name } = serviceResolved;
 
         if (!confirmed) {
-          setIntent(
-            ctx,
-            buildAppointmentIntent({
-              action: "create",
-              resource_id,
-              service_name,
-              selected_start_at: start_at,
-              selected_end_at: end_at,
-              awaiting_confirmation: true,
-            }),
-          );
+          setIntent(ctx, {
+            action: "create",
+            resource_id,
+            service_id,
+            service_name,
+            selected_start_at: start_at,
+            selected_end_at: end_at,
+            awaiting_confirmation: true,
+          });
           payload = {
             ok: false,
             code: "NEEDS_CONFIRMATION",
@@ -389,6 +613,7 @@ export async function executeClinicAppointmentTool(
           ctx.trusted,
           {
             resource_id,
+            service_id,
             service_name,
             start_at,
             end_at,
@@ -414,7 +639,7 @@ export async function executeClinicAppointmentTool(
             if (date && resource_id) {
               const alt = await appointmentService.getAvailabilityTrusted(
                 ctx.trusted,
-                { resource_id, date },
+                { resource_id, date, service_id },
               );
               if (alt.ok) alternatives = alt.data.slots.slice(0, 6);
             }
@@ -456,17 +681,14 @@ export async function executeClinicAppointmentTool(
           : undefined;
 
         if (!confirmed) {
-          setIntent(
-            ctx,
-            buildAppointmentIntent({
-              action: "reschedule",
-              appointment_id,
-              selected_start_at: start_at,
-              selected_end_at: end_at,
-              resource_id,
-              awaiting_confirmation: true,
-            }),
-          );
+          setIntent(ctx, {
+            action: "reschedule",
+            appointment_id,
+            selected_start_at: start_at,
+            selected_end_at: end_at,
+            resource_id,
+            awaiting_confirmation: true,
+          });
           payload = {
             ok: false,
             code: "NEEDS_CONFIRMATION",
@@ -512,14 +734,11 @@ export async function executeClinicAppointmentTool(
         const appointment_id = String(args.appointment_id ?? "");
 
         if (!confirmed) {
-          setIntent(
-            ctx,
-            buildAppointmentIntent({
-              action: "cancel",
-              appointment_id,
-              awaiting_confirmation: true,
-            }),
-          );
+          setIntent(ctx, {
+            action: "cancel",
+            appointment_id,
+            awaiting_confirmation: true,
+          });
           payload = {
             ok: false,
             code: "NEEDS_CONFIRMATION",

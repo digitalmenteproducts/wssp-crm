@@ -9,6 +9,7 @@ export type AppointmentIntentState = {
   action: AppointmentIntentAction;
   resource_id?: string;
   resource_name?: string;
+  service_id?: string;
   service_name?: string;
   requested_date?: string;
   selected_start_at?: string;
@@ -36,10 +37,35 @@ export function parseAgentMetadata(
 export function buildAppointmentIntent(
   patch: Partial<AppointmentIntentState> & { action: AppointmentIntentAction },
 ): AppointmentIntentState {
-  return {
+  const next: AppointmentIntentState = {
     ...patch,
     updated_at: new Date().toISOString(),
   };
+  // Allow explicit clear via undefined in patch
+  for (const key of Object.keys(next) as Array<keyof AppointmentIntentState>) {
+    if (next[key] === undefined) {
+      delete next[key];
+    }
+  }
+  return next;
+}
+
+/** Merge patch over previous intent (preserves service_name, resource, etc.). */
+export function mergeAppointmentIntent(
+  previous: AppointmentIntentState | undefined,
+  patch: Partial<AppointmentIntentState> & { action: AppointmentIntentAction },
+): AppointmentIntentState {
+  const merged: Record<string, unknown> = {
+    ...(previous ?? {}),
+    ...patch,
+    updated_at: new Date().toISOString(),
+  };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined) {
+      delete merged[key];
+    }
+  }
+  return merged as AppointmentIntentState;
 }
 
 export function clearAppointmentIntent(

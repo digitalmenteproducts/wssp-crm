@@ -15,11 +15,22 @@ const AFFIRMATIVE =
 const NEGATIVE =
   /\b(no|nop|nel|mejor no|cancel[ae]|olvidalo|ahora no|despues|quiza|quizas|tal vez|creo que no|no estoy seguro|no se)\b/;
 
+/** Rechazo o pedido de otro horario (sin ser todavía un "sí"). */
+const CHANGE_OR_DECLINE =
+  /\b(no|nop|nel|mejor no|cancel[ae]|olvidalo|ahora no|despues|otra hora|otro horario|cambial[ao]|cambiar|prefiero|mejor\s+\d|no quiero esa|esa no)\b/;
+
 export function isAffirmativeConfirmation(message: string): boolean {
   const text = normalize(message);
   if (!text) return false;
   if (NEGATIVE.test(text) && !AFFIRMATIVE.test(text)) return false;
   return AFFIRMATIVE.test(text);
+}
+
+export function isNegativeOrChangeIntent(message: string): boolean {
+  const text = normalize(message);
+  if (!text) return false;
+  if (isAffirmativeConfirmation(text)) return false;
+  return CHANGE_OR_DECLINE.test(text);
 }
 
 export function isWeakCancelIntent(message: string): boolean {

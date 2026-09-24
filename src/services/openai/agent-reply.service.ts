@@ -212,6 +212,11 @@ export async function generateAgentReplyWithTools(input: {
       totalTokens: number;
       toolRounds: number;
       rawContent: string;
+      toolTrace: Array<{
+        name: string;
+        arguments: string;
+        result: unknown;
+      }>;
     }
   | { ok: false; error: string }
 > {
@@ -228,6 +233,11 @@ export async function generateAgentReplyWithTools(input: {
   let outputTokens = 0;
   let totalTokens = 0;
   let toolRounds = 0;
+  const toolTrace: Array<{
+    name: string;
+    arguments: string;
+    result: unknown;
+  }> = [];
 
   for (let round = 0; round < maxRounds; round += 1) {
     const called = await callChatCompletions({
@@ -258,6 +268,7 @@ export async function generateAgentReplyWithTools(input: {
           totalTokens,
           toolRounds,
           rawContent: called.message.content ?? "",
+          toolTrace,
         };
       }
       messages.push({
@@ -275,10 +286,13 @@ export async function generateAgentReplyWithTools(input: {
     });
 
     for (const call of toolCalls) {
-      const toolResult = await input.executeTool(
-        call.function.name,
-        call.function.arguments ?? "{}",
-      );
+      const argsJson = call.function.arguments ?? "{}";
+      const toolResult = await input.executeTool(call.function.name, argsJson);
+      toolTrace.push({
+        name: call.function.name,
+        arguments: argsJson,
+        result: toolResult,
+      });
       messages.push({
         role: "tool",
         tool_call_id: call.id,
@@ -323,5 +337,6 @@ export async function generateAgentReplyWithTools(input: {
     totalTokens,
     toolRounds,
     rawContent: finalCall.message.content ?? "",
+    toolTrace,
   };
 }

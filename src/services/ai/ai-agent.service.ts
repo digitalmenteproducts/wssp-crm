@@ -32,7 +32,20 @@ import {
   executeClinicAppointmentTool,
   getClinicAppointmentToolDefinitions,
 } from "@/services/ai/clinic-appointment-tools";
-import { parseAgentMetadata } from "@/lib/ai/appointment-intent";
+import {
+  mergeAppointmentIntent,
+  parseAgentMetadata,
+  type AgentConversationMetadata,
+} from "@/lib/ai/appointment-intent";
+import { advanceClinicBookingTurn } from "@/lib/ai/clinic-booking-turn";
+import {
+  formatClinicServiceCatalogForPrompt,
+  resolveClinicService,
+  toClinicServiceCatalog,
+  type ClinicServiceCatalogItem,
+  type ClinicServiceResolveResult,
+} from "@/lib/ai/resolve-clinic-service";
+import * as appointmentService from "@/services/clinic/appointment.service";
 import { sendWhatsAppTextMessage } from "@/services/whatsapp/send-text.service";
 import type {
   AiAgentReplyResult,
@@ -40,8 +53,15 @@ import type {
   AiKnowledgeEntry,
 } from "@/types/ai-agent";
 import type { BusinessIndustry } from "@/types/business";
+import type { ClinicService } from "@/types/clinic";
 
 const CONTEXT_MESSAGE_LIMIT = 16;
+
+export type AgentToolTraceItem = {
+  name: string;
+  arguments: string;
+  result: unknown;
+};
 
 function formatZodIssues(error: { issues: { message: string }[] }): string {
   return error.issues.map((issue) => issue.message).join(" ");
@@ -304,6 +324,10 @@ async function runAgentGeneration(input: {
       ok: true;
       result: AiAgentReplyResult;
       model: string;
+      toolTrace: AgentToolTraceItem[];
+      agentMetadata: AgentConversationMetadata;
+      serviceResolution: ClinicServiceResolveResult | null;
+      serviceCatalog: ClinicServiceCatalogItem[];
     }
   | { ok: false; error: string }
 > {
@@ -353,6 +377,18 @@ async function runAgentGeneration(input: {
     ranked = ambient.length > 0 ? ambient : (knowledgeRows ?? []).slice(0, 2);
   }
 
+  // Booking intents: ensure tratamientos Knowledge is in the prompt context.
+  const treatmentEntries = (knowledgeRows ?? []).filter(
+    (entry) =>
+      entry.category === "productos" ||
+      /tratamiento|servicio|procedimiento/i.test(entry.title),
+  );
+  for (const entry of treatmentEntries) {
+    if (!ranked.some((r) => r.id === entry.id)) {
+      ranked = [...ranked, entry].slice(0, 6);
+    }
+  }
+
   console.info("[ai-agent] knowledge_retrieval", {
     knowledge_query: input.userMessage.slice(0, 200),
     business_id: input.businessId,
@@ -371,14 +407,159 @@ async function runAgentGeneration(input: {
     clinicAppointmentToolsEnabled: settings.clinic_appointment_tools_enabled,
   });
 
+  let clinicServicesList: ClinicService[] = [];
+  if (clinicToolsEnabled) {
+    const clinicServicesLoaded =
+      await appointmentService.listActiveServicesTrusted({
+        businessId: input.businessId,
+      });
+    if (clinicServicesLoaded.ok) {
+      clinicServicesList = clinicServicesLoaded.data ?? [];
+    }
+  }
+
+  const serviceResolution: ClinicServiceResolveResult | null = clinicToolsEnabled
+    ? resolveClinicService({
+        userMessage: input.userMessage,
+        services: clinicServicesList,
+      })
+    : null;
+
+  const serviceCatalog: ClinicServiceCatalogItem[] =
+    serviceResolution?.catalog ?? toClinicServiceCatalog(clinicServicesList);
+
+  let metadata = parseAgentMetadata(input.agentMetadata);
+
+  if (serviceResolution?.status === "resolved") {
+    const prev = metadata.appointment_intent;
+    const patch = {
+      action: "create" as const,
+      service_id: serviceResolution.service_id,
+      service_name: serviceResolution.service_name,
+      awaiting_confirmation: false,
+    };
+    if (!prev?.awaiting_confirmation) {
+      metadata = {
+        ...metadata,
+        appointment_intent: mergeAppointmentIntent(prev, patch),
+      };
+    } else {
+      metadata = {
+        ...metadata,
+        appointment_intent: mergeAppointmentIntent(prev, {
+          service_id: prev.service_id || serviceResolution.service_id,
+          service_name: prev.service_name || serviceResolution.service_name,
+          action: prev.action === "none" ? "create" : prev.action,
+        }),
+      };
+    }
+  } else if (serviceResolution?.status === "requires_consultation") {
+    const prev = metadata.appointment_intent;
+    const consultationId = serviceResolution.consultation_service_id;
+    const consultationName = serviceResolution.consultation_service_name;
+    if (consultationId && consultationName && !prev?.awaiting_confirmation) {
+      metadata = {
+        ...metadata,
+        appointment_intent: mergeAppointmentIntent(prev, {
+          action: "create",
+          service_id: consultationId,
+          service_name: consultationName,
+          awaiting_confirmation: false,
+        }),
+      };
+    }
+  }
+
+  let bookingSystemNote = "";
+  let bookingServerTrace: AgentToolTraceItem[] = [];
+  if (clinicToolsEnabled && input.contactId) {
+    const bookingTurn = await advanceClinicBookingTurn({
+      message: input.userMessage,
+      metadata,
+      trusted: {
+        businessId: input.businessId,
+        timezone: businessCtx.timezone,
+        contactId: input.contactId,
+      },
+    });
+    metadata = bookingTurn.metadata;
+    bookingSystemNote = bookingTurn.systemNote;
+    bookingServerTrace = bookingTurn.serverToolTrace.map((t) => ({
+      name: t.name,
+      arguments: JSON.stringify(t.arguments),
+      result: t.result,
+    }));
+
+    if (input.conversationId) {
+      await aiAgentRepository.updateConversationAgentState({
+        conversationId: input.conversationId,
+        businessId: input.businessId,
+        agentMetadata: metadata as unknown as Record<string, unknown>,
+      });
+    }
+  }
+
+  const contactProfile = input.contactId
+    ? await loadContactProfile(input.contactId, input.businessId)
+    : null;
+
+  const patientContextBlock = contactProfile
+    ? [
+        contactProfile.name
+          ? `Nombre ya conocido: ${contactProfile.name}. NO lo vuelvas a pedir.`
+          : "Nombre: no registrado.",
+        contactProfile.phone
+          ? `Teléfono/WhatsApp ya conocido: ${contactProfile.phone}. NO lo vuelvas a pedir.`
+          : "Teléfono: no registrado.",
+        contactProfile.email
+          ? `Email (opcional, ya conocido): ${contactProfile.email}.`
+          : "Email: no es obligatorio; no lo exijas para continuar.",
+      ].join("\n")
+    : "(sin contacto cargado)";
+
+  const serviceCatalogBlock = formatClinicServiceCatalogForPrompt(serviceCatalog);
+
+  let serviceResolutionBlock = "(Sin resolución de servicio en este turno.)";
+  if (serviceResolution?.status === "resolved") {
+    serviceResolutionBlock = `Intención de reserva detectada. Servicio validado en clinic_services: "${serviceResolution.service_name}" (service_id=${serviceResolution.service_id}). Usa exactamente ese service_id en tools. Continúa pidiendo fecha/profesional/horario. NO pidas nombre/teléfono/email si ya están conocidos.`;
+  } else if (serviceResolution?.status === "requires_consultation") {
+    const consultLine =
+      serviceResolution.consultation_service_id && serviceResolution.consultation_service_name
+        ? `Reserva la consulta de valoración: "${serviceResolution.consultation_service_name}" (service_id=${serviceResolution.consultation_service_id}).`
+        : "Ofrece consulta de valoración (elige un servicio de consulta del catálogo si existe).";
+    serviceResolutionBlock = `El paciente pidió "${serviceResolution.service_name}", que requiere valoración previa. NO reserves ese tratamiento como cita directa. ${consultLine} NO uses el service_id del tratamiento principal para clinic_create_appointment.`;
+  } else if (serviceResolution?.status === "ambiguous") {
+    serviceResolutionBlock = `Intención de reserva detectada, pero el servicio es ambiguo. Candidatos: ${serviceResolution.candidates.map((c) => `${c.name} (id=${c.id})`).join(", ")}. Pregunta cuál desea. NO inventes service_id.`;
+  } else if (serviceResolution?.status === "not_found") {
+    serviceResolutionBlock = `Intención de reserva detectada, pero el tratamiento pedido NO está en clinic_services activos. NO inventes service_id ni service_name. Ofrece consulta de valoración si figura en el catálogo.`;
+  } else if (serviceResolution?.status === "inactive") {
+    serviceResolutionBlock = `El servicio "${serviceResolution.service_name}" existe pero no está activo para reservas. NO uses su service_id. Ofrece alternativas del catálogo o consulta de valoración.`;
+  } else if (serviceResolution?.status === "no_booking_intent") {
+    serviceResolutionBlock =
+      "No se detectó intención clara de reserva en este mensaje.";
+  }
+
+  const appointmentIntentBlock = metadata.appointment_intent
+    ? JSON.stringify(metadata.appointment_intent)
+    : "(vacío)";
+
+  const bookingTurnBlock = bookingSystemNote
+    ? `\n\nACTUALIZACIÓN DE ESTADO DE ESTE TURNO (obligatoria, server-side):\n${bookingSystemNote}`
+    : "";
+
   const systemPrompt = buildAgentSystemPrompt({
     settings,
     knowledgeBlock: formatKnowledgeForPrompt(ranked),
     clinicToolsEnabled,
     timezone: businessCtx.timezone,
+    patientContextBlock,
+    serviceCatalogBlock,
+    appointmentIntentBlock: `${appointmentIntentBlock}${bookingTurnBlock}`,
+    serviceResolutionBlock,
   });
 
   const model = getAgentModel();
+  let toolTrace: AgentToolTraceItem[] = [...bookingServerTrace];
   let generated:
     | {
         ok: true;
@@ -390,42 +571,72 @@ async function runAgentGeneration(input: {
     | { ok: false; error: string };
 
   if (clinicToolsEnabled && input.contactId) {
-    let metadata = parseAgentMetadata(input.agentMetadata);
-    generated = await generateAgentReplyWithTools({
-      apiKey,
-      model,
-      systemPrompt,
-      messages: [
-        ...input.history,
-        { role: "user", content: input.userMessage },
-      ],
-      tools: getClinicAppointmentToolDefinitions(),
-      executeTool: async (name, argsJson) => {
-        const exec = await executeClinicAppointmentTool(name, argsJson, {
-          trusted: {
-            businessId: input.businessId,
-            timezone: businessCtx.timezone,
-            contactId: input.contactId!,
-          },
-          industry: businessCtx.industry,
-          clinicAppointmentToolsEnabled:
-            settings.clinic_appointment_tools_enabled,
-          latestUserMessage: input.userMessage,
-          metadata,
-          onMetadataChange: (next) => {
-            metadata = next;
-          },
-        });
-        if (input.conversationId) {
-          await aiAgentRepository.updateConversationAgentState({
-            conversationId: input.conversationId,
-            businessId: input.businessId,
-            agentMetadata: metadata as unknown as Record<string, unknown>,
+    // Persist after booking-turn (already done above if conversationId).
+    // Skip OpenAI tool create if server already created this turn.
+    const skipTools =
+      bookingServerTrace.some(
+        (t) =>
+          t.name === "clinic_create_appointment" &&
+          typeof t.result === "object" &&
+          t.result !== null &&
+          "ok" in t.result &&
+          (t.result as { ok: boolean }).ok === true,
+      );
+
+    if (skipTools) {
+      generated = await generateAgentReplyWithOpenAI({
+        apiKey,
+        model,
+        systemPrompt,
+        messages: [
+          ...input.history,
+          { role: "user", content: input.userMessage },
+        ],
+      });
+    } else {
+      const withTools = await generateAgentReplyWithTools({
+        apiKey,
+        model,
+        systemPrompt,
+        messages: [
+          ...input.history,
+          { role: "user", content: input.userMessage },
+        ],
+        tools: getClinicAppointmentToolDefinitions(),
+        executeTool: async (name, argsJson) => {
+          const exec = await executeClinicAppointmentTool(name, argsJson, {
+            trusted: {
+              businessId: input.businessId,
+              timezone: businessCtx.timezone,
+              contactId: input.contactId!,
+            },
+            industry: businessCtx.industry,
+            clinicAppointmentToolsEnabled:
+              settings.clinic_appointment_tools_enabled,
+            latestUserMessage: input.userMessage,
+            metadata,
+            serviceCatalog,
+            onMetadataChange: (next) => {
+              metadata = next;
+            },
           });
-        }
-        return exec.result;
-      },
-    });
+          if (input.conversationId) {
+            await aiAgentRepository.updateConversationAgentState({
+              conversationId: input.conversationId,
+              businessId: input.businessId,
+              agentMetadata: metadata as unknown as Record<string, unknown>,
+            });
+          }
+          return exec.result;
+        },
+      });
+      if (!withTools.ok) {
+        generated = withTools;
+      } else {
+        toolTrace = [...bookingServerTrace, ...withTools.toolTrace];
+        generated = withTools;
+      }
+    }
   } else {
     generated = await generateAgentReplyWithOpenAI({
       apiKey,
@@ -440,6 +651,15 @@ async function runAgentGeneration(input: {
 
   if (!generated.ok) {
     return generated;
+  }
+
+  // Persist metadata even if no tools ran (seeded service_name).
+  if (input.conversationId && clinicToolsEnabled) {
+    await aiAgentRepository.updateConversationAgentState({
+      conversationId: input.conversationId,
+      businessId: input.businessId,
+      agentMetadata: metadata as unknown as Record<string, unknown>,
+    });
   }
 
   let result = reconcileAgentConfidence({
@@ -490,7 +710,15 @@ async function runAgentGeneration(input: {
     confidence: result.confidence,
   });
 
-  return { ok: true, result, model };
+  return {
+    ok: true,
+    result,
+    model,
+    toolTrace,
+    agentMetadata: metadata,
+    serviceResolution,
+    serviceCatalog,
+  };
 }
 
 export async function testAiAgentForCurrentBusiness(
@@ -518,12 +746,18 @@ export async function testAiAgentForCurrentBusiness(
   const settings =
     settingsRow ?? defaultSettings(gate.businessId, gate.businessName);
 
-  return runAgentGeneration({
+  const generated = await runAgentGeneration({
     businessId: gate.businessId,
     settings,
     userMessage: parsed.data.message.trim(),
     history: [],
   });
+  if (!generated.ok) return generated;
+  return {
+    ok: true,
+    result: generated.result,
+    model: generated.model,
+  };
 }
 
 /**
@@ -715,7 +949,8 @@ export async function processIncomingMessageWithAgent(input: {
 
 /**
  * Simula un turno del agente SIN enviar WhatsApp.
- * Respeta enabled + clinic tools flags. Para harness de pruebas.
+ * Multi-turn: reutiliza/crea conversación, persiste historial + appointment_intent.
+ * Respeta flags reales. NO activa enabled ni envía WhatsApp.
  */
 export async function simulateAgentTurnWithoutWhatsApp(input: {
   businessId: string;
@@ -729,6 +964,11 @@ export async function simulateAgentTurnWithoutWhatsApp(input: {
       result: AiAgentReplyResult;
       model: string;
       clinicToolsEligible: boolean;
+      conversationId: string;
+      toolTrace: AgentToolTraceItem[];
+      appointment_intent: AgentConversationMetadata["appointment_intent"];
+      serviceResolution: ClinicServiceResolveResult | null;
+      serviceCatalog: ClinicServiceCatalogItem[];
     }
   | { ok: false; error: string }
 > {
@@ -742,32 +982,94 @@ export async function simulateAgentTurnWithoutWhatsApp(input: {
   const settings =
     settingsRow ?? defaultSettings(input.businessId, businessCtx.name);
 
-  let agentMetadata: Record<string, unknown> | null = null;
-  if (input.conversationId) {
-    const { data: conv } =
-      await aiAgentRepository.getConversationAgentStateAdmin(
-        input.conversationId,
-        input.businessId,
-      );
-    agentMetadata = conv?.agent_metadata ?? null;
+  const conversationId = await ensureHarnessConversation({
+    businessId: input.businessId,
+    contactId: input.contactId,
+    conversationId: input.conversationId ?? null,
+  });
+  if (!conversationId) {
+    return { ok: false, error: "No se pudo crear/obtener conversación de harness." };
   }
+
+  const { data: conv } =
+    await aiAgentRepository.getConversationAgentStateAdmin(
+      conversationId,
+      input.businessId,
+    );
+  const agentMetadata = conv?.agent_metadata ?? null;
+
+  let history = input.history ?? [];
+  if (history.length === 0) {
+    const { data: recent } = await aiAgentRepository.listRecentMessagesAdmin(
+      conversationId,
+      input.businessId,
+      CONTEXT_MESSAGE_LIMIT,
+    );
+    history = [...(recent ?? [])]
+      .reverse()
+      .filter((m) => Boolean(m.body?.trim()))
+      .map((m) => ({
+        role:
+          m.direction === "inbound"
+            ? ("user" as const)
+            : ("assistant" as const),
+        content: m.body!.trim(),
+      }));
+  }
+
+  const now = new Date().toISOString();
+  const inboundWaId = `harness-in-${crypto.randomUUID()}`;
+  await whatsappRepository.createMessage({
+    businessId: input.businessId,
+    conversationId,
+    waMessageId: inboundWaId,
+    direction: "inbound",
+    type: "text",
+    body: input.message.trim(),
+    rawPayload: { harness: true, source: "clinic-agent-harness" },
+    createdAt: now,
+  });
 
   const generated = await runAgentGeneration({
     businessId: input.businessId,
     settings,
     userMessage: input.message.trim(),
-    history: input.history ?? [],
-    conversationId: input.conversationId,
+    history,
+    conversationId,
     contactId: input.contactId,
     agentMetadata,
+    sourceMessageId: null,
   });
 
   if (!generated.ok) return generated;
+
+  const outboundWaId = `harness-out-${crypto.randomUUID()}`;
+  await whatsappRepository.createMessage({
+    businessId: input.businessId,
+    conversationId,
+    waMessageId: outboundWaId,
+    direction: "outbound",
+    type: "text",
+    body: generated.result.reply,
+    rawPayload: { harness: true, source: "clinic-agent-harness" },
+    createdAt: new Date().toISOString(),
+  });
+
+  await whatsappRepository.touchConversation({
+    conversationId,
+    lastMessageAt: new Date().toISOString(),
+    resetAiStatus: false,
+  });
 
   return {
     ok: true,
     result: generated.result,
     model: generated.model,
+    conversationId,
+    toolTrace: generated.toolTrace,
+    appointment_intent: generated.agentMetadata.appointment_intent,
+    serviceResolution: generated.serviceResolution,
+    serviceCatalog: generated.serviceCatalog,
     clinicToolsEligible: clinicAppointmentToolsAllowed({
       industry: businessCtx.industry,
       clinicAppointmentToolsEnabled: Boolean(
@@ -777,16 +1079,65 @@ export async function simulateAgentTurnWithoutWhatsApp(input: {
   };
 }
 
+async function ensureHarnessConversation(input: {
+  businessId: string;
+  contactId: string;
+  conversationId: string | null;
+}): Promise<string | null> {
+  // Continuar multi-turn: reutilizar conversación indicada.
+  if (input.conversationId) {
+    const { data } = await aiAgentRepository.getConversationAgentStateAdmin(
+      input.conversationId,
+      input.businessId,
+    );
+    if (data && data.contact_id === input.contactId) return data.id;
+    return null;
+  }
+
+  // Primer turno de harness: conversación NUEVA (unique contact_id → borrar previa).
+  const supabase = createAdminClient();
+  const existing = await whatsappRepository.findConversationByContactId(
+    input.contactId,
+  );
+  if (existing.data?.id) {
+    await supabase
+      .from("conversations")
+      .delete()
+      .eq("id", existing.data.id)
+      .eq("business_id", input.businessId)
+      .eq("contact_id", input.contactId);
+  }
+
+  const created = await whatsappRepository.createConversation({
+    businessId: input.businessId,
+    contactId: input.contactId,
+    lastMessageAt: new Date().toISOString(),
+  });
+  return created.data?.id ?? null;
+}
+
+async function loadContactProfile(
+  contactId: string,
+  businessId: string,
+): Promise<{ name: string | null; phone: string | null; email: string | null } | null> {
+  const supabase = createAdminClient();
+  const { data } = await supabase
+    .from("contacts")
+    .select("name, phone, email")
+    .eq("id", contactId)
+    .eq("business_id", businessId)
+    .maybeSingle<{
+      name: string | null;
+      phone: string | null;
+      email: string | null;
+    }>();
+  return data ?? null;
+}
+
 async function loadContactPhone(
   contactId: string,
   businessId: string,
 ): Promise<string | null> {
-  const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("contacts")
-    .select("phone")
-    .eq("id", contactId)
-    .eq("business_id", businessId)
-    .maybeSingle<{ phone: string }>();
-  return data?.phone ?? null;
+  const profile = await loadContactProfile(contactId, businessId);
+  return profile?.phone ?? null;
 }

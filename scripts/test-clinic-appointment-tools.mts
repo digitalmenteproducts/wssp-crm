@@ -30,8 +30,21 @@ function loadEnvLocal() {
 
 loadEnvLocal();
 
-const { isAffirmativeConfirmation } = await import("../src/lib/ai/confirmation");
-const { resolveRelativeDate } = await import("../src/lib/ai/relative-dates");
+const { isAffirmativeConfirmation, isNegativeOrChangeIntent } = await import(
+  "../src/lib/ai/confirmation"
+);
+const {
+  resolveRelativeDate,
+  resolveAppointmentDateInput,
+  extractRelativeDateExpression,
+} = await import("../src/lib/ai/relative-dates");
+const {
+  resolveOfferedSlotSelection,
+  resolveResourceIdFromArgs,
+} = await import("../src/lib/ai/offered-slot-selection");
+const { advanceClinicBookingTurn } = await import(
+  "../src/lib/ai/clinic-booking-turn"
+);
 const {
   clinicAppointmentToolsAllowed,
   executeClinicAppointmentTool,
@@ -42,6 +55,8 @@ const appointmentService = await import(
 const { zonedLocalToUtcIso } = await import("../src/lib/clinic/datetime");
 
 const TZ = "America/Argentina/Tucuman";
+/** Jueves 24/09/2026 12:00 en America/Argentina/Tucuman */
+const NOW_THU = new Date("2026-09-24T15:00:00.000Z");
 let passed = 0;
 let failed = 0;
 
@@ -82,20 +97,474 @@ assert("confirmo confirma", isAffirmativeConfirmation("Confirmo"));
 assert("dale confirma", isAffirmativeConfirmation("Dale"));
 assert("quizás no confirma", !isAffirmativeConfirmation("Quizás cancele"));
 assert("empty no", !isAffirmativeConfirmation(""));
+assert("no es negativo", isNegativeOrChangeIntent("No"));
+assert("mejor otra hora negativo", isNegativeOrChangeIntent("mejor otra hora"));
 
 {
-  const now = new Date("2026-09-23T18:00:00.000Z");
+  const slots = [
+    {
+      start_at: "2026-09-28T12:30:00.000Z",
+      end_at: "2026-09-28T13:00:00.000Z",
+      display_time: "09:30",
+    },
+    {
+      start_at: "2026-09-28T13:00:00.000Z",
+      end_at: "2026-09-28T13:30:00.000Z",
+      display_time: "10:00",
+    },
+    {
+      start_at: "2026-09-28T14:00:00.000Z",
+      end_at: "2026-09-28T14:30:00.000Z",
+      display_time: "11:00",
+    },
+  ];
+  const s1000 = resolveOfferedSlotSelection("10:00", slots);
   assert(
-    "mañana",
-    resolveRelativeDate("mañana", TZ, now) === "2026-09-24",
-    resolveRelativeDate("mañana", TZ, now) ?? "",
+    "select 10:00 exact",
+    s1000.status === "selected" &&
+      s1000.slot.start_at === "2026-09-28T13:00:00.000Z",
+    JSON.stringify(s1000),
   );
-  assert("hoy", resolveRelativeDate("hoy", TZ, now) === "2026-09-23");
-  const lunes = resolveRelativeDate("lunes", TZ, now);
-  assert("lunes futuro", lunes === "2026-09-28", lunes ?? "");
+  const s10 = resolveOfferedSlotSelection("10", slots);
+  assert(
+    "select 10 → 10:00 unique hour",
+    s10.status === "selected" &&
+      s10.slot.display_time === "10:00",
+    JSON.stringify(s10),
+  );
+  const sEl = resolveOfferedSlotSelection("el de las 10", slots);
+  assert(
+    "el de las 10 → 10:00",
+    sEl.status === "selected" && sEl.slot.display_time === "10:00",
+    JSON.stringify(sEl),
+  );
+  const s0800 = resolveOfferedSlotSelection("08:00", slots);
+  assert(
+    "08:00 not offered",
+    s0800.status === "not_in_offered",
+    JSON.stringify(s0800),
+  );
+
+  const resourceUuid = "de99dad5-e8da-4bf2-b1d0-6e614361fe0b";
+  const fromName = resolveResourceIdFromArgs({
+    argResourceId: "Dra. Constanza",
+    intent: {
+      action: "get_availability",
+      resource_id: resourceUuid,
+      resource_name: "Dra Constanza",
+    },
+  });
+  assert(
+    "resource_name → reuse intent UUID",
+    fromName.ok && fromName.resource_id === resourceUuid,
+    JSON.stringify(fromName),
+  );
+  const bad = resolveResourceIdFromArgs({
+    argResourceId: "Dra. Constanza",
+    intent: { action: "create" },
+  });
+  assert(
+    "resource_name without intent UUID fails",
+    !bad.ok && bad.code === "INVALID_RESOURCE_ID",
+    JSON.stringify(bad),
+  );
+}
+
+{
+  const offered = [
+    {
+      start_at: "2026-09-28T13:00:00.000Z",
+      end_at: "2026-09-28T13:30:00.000Z",
+      display_time: "10:00",
+    },
+    {
+      start_at: "2026-09-28T14:00:00.000Z",
+      end_at: "2026-09-28T14:30:00.000Z",
+      display_time: "11:00",
+    },
+  ];
+  const baseMeta = {
+    appointment_intent: {
+      action: "get_availability" as const,
+      service_name: "Rinomodelación",
+      resource_id: "de99dad5-e8da-4bf2-b1d0-6e614361fe0b",
+      resource_name: "Dra Constanza",
+      requested_date: "2026-09-28",
+      offered_slots: offered,
+      awaiting_confirmation: false,
+    },
+  };
+  const trusted = {
+    businessId: "00000000-0000-0000-0000-000000000099",
+    timezone: TZ,
+    contactId: "00000000-0000-0000-0000-000000000002",
+  };
+
+  const selected = await advanceClinicBookingTurn({
+    message: "10:00",
+    metadata: baseMeta,
+    trusted,
+    serviceCatalog: ["Rinomodelación"],
+  });
+  const selIntent = selected.metadata.appointment_intent!;
+  assert(
+    "turn select → awaiting true",
+    selected.event.type === "slot_selected" &&
+      selIntent.awaiting_confirmation === true &&
+      selIntent.action === "create" &&
+      selIntent.selected_start_at === "2026-09-28T13:00:00.000Z" &&
+      selIntent.selected_end_at === "2026-09-28T13:30:00.000Z" &&
+      selected.serverToolTrace.length === 0,
+    JSON.stringify(selected.event),
+  );
+
+  const notOffered = await advanceClinicBookingTurn({
+    message: "08:00",
+    metadata: baseMeta,
+    trusted,
+    serviceCatalog: ["Rinomodelación"],
+  });
+  assert(
+    "turn 08:00 not selected",
+    notOffered.event.type === "slot_not_offered" &&
+      notOffered.metadata.appointment_intent?.awaiting_confirmation !== true,
+    JSON.stringify(notOffered.event),
+  );
+
+  const awaitingMeta = {
+    appointment_intent: {
+      ...baseMeta.appointment_intent,
+      action: "create" as const,
+      awaiting_confirmation: true,
+      selected_start_at: "2026-09-28T13:00:00.000Z",
+      selected_end_at: "2026-09-28T13:30:00.000Z",
+    },
+  };
+
+  const declined = await advanceClinicBookingTurn({
+    message: "No",
+    metadata: awaitingMeta,
+    trusted,
+    serviceCatalog: ["Rinomodelación"],
+  });
+  assert(
+    "No → no create",
+    declined.event.type === "confirmation_declined" &&
+      declined.serverToolTrace.length === 0 &&
+      declined.metadata.appointment_intent?.awaiting_confirmation === false,
+    JSON.stringify(declined.event),
+  );
+
+  const swap = await advanceClinicBookingTurn({
+    message: "mejor 11:00",
+    metadata: awaitingMeta,
+    trusted,
+    serviceCatalog: ["Rinomodelación"],
+  });
+  assert(
+    "mejor 11:00 → new slot awaiting",
+    swap.event.type === "slot_selected" &&
+      swap.metadata.appointment_intent?.selected_start_at ===
+        "2026-09-28T14:00:00.000Z" &&
+      swap.metadata.appointment_intent?.awaiting_confirmation === true &&
+      swap.serverToolTrace.length === 0,
+    JSON.stringify(swap.event),
+  );
+
+  const siNoSlot = await advanceClinicBookingTurn({
+    message: "Sí",
+    metadata: {
+      appointment_intent: {
+        action: "create",
+        awaiting_confirmation: true,
+        service_name: "Rinomodelación",
+        resource_id: "de99dad5-e8da-4bf2-b1d0-6e614361fe0b",
+        // missing selected_start_at/end_at
+      },
+    },
+    trusted,
+    serviceCatalog: ["Rinomodelación"],
+  });
+  assert(
+    "Sí without selected slot → no create",
+    siNoSlot.event.type === "cannot_confirm_missing_slot" &&
+      siNoSlot.serverToolTrace.length === 0,
+    JSON.stringify(siNoSlot.event),
+  );
+}
+
+{
+  const { resolveServiceFromKnowledge } = await import(
+    "../src/lib/ai/resolve-service-from-knowledge"
+  );
+  const knowledge = [
+    {
+      id: "1",
+      business_id: "b",
+      title: "Tratamientos disponibles",
+      category: "productos" as const,
+      enabled: true,
+      content: `- Armonía labial
+- Rinomodelación
+- Contorno mandibular
+- Armonización facial
+- HIFU (ultrasonido focalizado)
+- Bioestimuladores de colágeno
+- Toxina botulínica`,
+      created_at: "",
+      updated_at: "",
+    },
+  ];
+  const rino = resolveServiceFromKnowledge({
+    userMessage: "Quiero una cita para rinomodelación",
+    knowledgeEntries: knowledge,
+  });
+  assert(
+    "resolve rinomodelación",
+    rino.status === "resolved" && rino.service_name === "Rinomodelación",
+    JSON.stringify(rino),
+  );
+  const nariz = resolveServiceFromKnowledge({
+    userMessage: "quiero hacerme la nariz",
+    knowledgeEntries: knowledge,
+  });
+  assert(
+    "resolve nariz → Rinomodelación",
+    nariz.status === "resolved" && nariz.service_name === "Rinomodelación",
+    JSON.stringify(nariz),
+  );
+  const unknown = resolveServiceFromKnowledge({
+    userMessage: "Quiero una cita para diseño de sonrisa",
+    knowledgeEntries: knowledge,
+  });
+  assert(
+    "diseño de sonrisa not_found",
+    unknown.status === "not_found",
+    JSON.stringify(unknown),
+  );
+  const noIntent = resolveServiceFromKnowledge({
+    userMessage: "¿Dónde queda la clínica?",
+    knowledgeEntries: knowledge,
+  });
+  assert(
+    "ubicacion no booking",
+    noIntent.status === "no_booking_intent",
+    JSON.stringify(noIntent),
+  );
+}
+
+{
+  // Deterministic relative dates — now = jueves 24/09/2026 12:00 Tucumán
+  assert(
+    "el próximo lunes → 2026-09-28",
+    resolveRelativeDate("el próximo lunes", TZ, NOW_THU) === "2026-09-28",
+    resolveRelativeDate("el próximo lunes", TZ, NOW_THU) ?? "",
+  );
+  assert(
+    "próximo lunes → 2026-09-28",
+    resolveRelativeDate("próximo lunes", TZ, NOW_THU) === "2026-09-28",
+  );
+  assert(
+    "mañana → 2026-09-25",
+    resolveRelativeDate("mañana", TZ, NOW_THU) === "2026-09-25",
+  );
+  assert(
+    "pasado mañana → 2026-09-26",
+    resolveRelativeDate("pasado mañana", TZ, NOW_THU) === "2026-09-26",
+  );
+  assert(
+    "hoy → 2026-09-24",
+    resolveRelativeDate("hoy", TZ, NOW_THU) === "2026-09-24",
+  );
+  assert(
+    "este viernes → 2026-09-25",
+    resolveRelativeDate("este viernes", TZ, NOW_THU) === "2026-09-25",
+    resolveRelativeDate("este viernes", TZ, NOW_THU) ?? "",
+  );
+  assert(
+    "próximo viernes → 2026-09-25",
+    resolveRelativeDate("próximo viernes", TZ, NOW_THU) === "2026-09-25",
+  );
+  assert(
+    "el lunes → 2026-09-28",
+    resolveRelativeDate("el lunes", TZ, NOW_THU) === "2026-09-28",
+  );
   assert(
     "ambiguo null",
-    resolveRelativeDate("el otro viernes", TZ, now) === null,
+    resolveRelativeDate("el otro viernes", TZ, NOW_THU) === null,
+  );
+  assert(
+    "YYYY-MM-DD no pasa por relative",
+    resolveRelativeDate("2023-09-25", TZ, NOW_THU) === null,
+  );
+
+  // Pastore bug: LLM inventó 2023-09-25; backend usa mensaje del paciente
+  const pastore = resolveAppointmentDateInput({
+    date: "2023-09-25",
+    latestUserMessage: "El próximo lunes por la mañana",
+    timeZone: TZ,
+    now: NOW_THU,
+  });
+  assert(
+    "Pastore: relativo gana sobre 2023 inventado → 2026-09-28",
+    pastore.ok && pastore.date === "2026-09-28",
+    JSON.stringify(pastore),
+  );
+
+  const pastAbsolute = resolveAppointmentDateInput({
+    date: "2023-09-25",
+    latestUserMessage: "quiero una cita",
+    timeZone: TZ,
+    now: NOW_THU,
+  });
+  assert(
+    "fecha pasada absoluta → INVALID_APPOINTMENT_DATE",
+    !pastAbsolute.ok && pastAbsolute.code === "INVALID_APPOINTMENT_DATE",
+    JSON.stringify(pastAbsolute),
+  );
+
+  const ambiguous = resolveAppointmentDateInput({
+    date_expression: "el otro viernes",
+    timeZone: TZ,
+    now: NOW_THU,
+  });
+  assert(
+    "DATE_AMBIGUOUS",
+    !ambiguous.ok && ambiguous.code === "DATE_AMBIGUOUS",
+    JSON.stringify(ambiguous),
+  );
+
+  const viaExpression = resolveAppointmentDateInput({
+    date_expression: "el próximo lunes",
+    timeZone: TZ,
+    now: NOW_THU,
+  });
+  assert(
+    "date_expression → 2026-09-28",
+    viaExpression.ok && viaExpression.date === "2026-09-28",
+    JSON.stringify(viaExpression),
+  );
+
+  assert(
+    "extract from patient message",
+    extractRelativeDateExpression("El próximo lunes por la mañana") ===
+      "el proximo lunes",
+    extractRelativeDateExpression("El próximo lunes por la mañana") ?? "",
+  );
+}
+
+{
+  // Tool-level: past date blocked WITHOUT calling AppointmentService
+  let meta: Record<string, unknown> = {};
+  const blocked = await executeClinicAppointmentTool(
+    "clinic_get_availability",
+    JSON.stringify({
+      resource_id: "11111111-1111-4111-a111-111111111111",
+      date: "2023-09-25",
+      time_preference: "morning",
+    }),
+    {
+      trusted: {
+        businessId: "00000000-0000-4000-a000-000000000099",
+        timezone: TZ,
+        contactId: "00000000-0000-4000-a000-000000000002",
+      },
+      industry: "clinic",
+      clinicAppointmentToolsEnabled: true,
+      latestUserMessage: "quiero turno",
+      metadata: meta,
+      serviceCatalog: ["Rinomodelación"],
+      now: NOW_THU,
+      onMetadataChange: (m) => {
+        meta = m as Record<string, unknown>;
+      },
+    },
+  );
+  assert(
+    "tool past date → INVALID_APPOINTMENT_DATE",
+    blocked.error_code === "INVALID_APPOINTMENT_DATE",
+    JSON.stringify(blocked.result),
+  );
+  assert(
+    "requested_date NOT persisted on invalid date",
+    !(meta as { appointment_intent?: { requested_date?: string } })
+      .appointment_intent?.requested_date,
+    JSON.stringify(meta),
+  );
+
+  const amb = await executeClinicAppointmentTool(
+    "clinic_get_availability",
+    JSON.stringify({
+      resource_id: "11111111-1111-4111-a111-111111111111",
+      date_expression: "el otro viernes",
+    }),
+    {
+      trusted: {
+        businessId: "00000000-0000-4000-a000-000000000099",
+        timezone: TZ,
+        contactId: "00000000-0000-4000-a000-000000000002",
+      },
+      industry: "clinic",
+      clinicAppointmentToolsEnabled: true,
+      latestUserMessage: "el otro viernes",
+      metadata: {},
+      serviceCatalog: [],
+      now: NOW_THU,
+      onMetadataChange: () => undefined,
+    },
+  );
+  assert(
+    "tool ambiguous → DATE_AMBIGUOUS",
+    amb.error_code === "DATE_AMBIGUOUS",
+    JSON.stringify(amb.result),
+  );
+
+  // Invented start_at rejected when offered_slots exist
+  let inventMeta: Record<string, unknown> = {
+    appointment_intent: {
+      action: "create",
+      service_name: "Rinomodelación",
+      resource_id: "de99dad5-e8da-4bf2-b1d0-6e614361fe0b",
+      offered_slots: [
+        {
+          start_at: "2026-09-28T13:00:00.000Z",
+          end_at: "2026-09-28T13:30:00.000Z",
+          display_time: "10:00",
+        },
+      ],
+      awaiting_confirmation: false,
+    },
+  };
+  const inventedSlot = await executeClinicAppointmentTool(
+    "clinic_create_appointment",
+    JSON.stringify({
+      resource_id: "de99dad5-e8da-4bf2-b1d0-6e614361fe0b",
+      service_name: "Rinomodelación",
+      start_at: "2026-09-28T15:00:00.000Z",
+      end_at: "2026-09-28T15:30:00.000Z",
+      patient_confirmed: false,
+    }),
+    {
+      trusted: {
+        businessId: "00000000-0000-0000-0000-000000000099",
+        timezone: TZ,
+        contactId: "00000000-0000-0000-0000-000000000002",
+      },
+      industry: "clinic",
+      clinicAppointmentToolsEnabled: true,
+      latestUserMessage: "quiero a las 12",
+      metadata: inventMeta as never,
+      serviceCatalog: ["Rinomodelación"],
+      now: NOW_THU,
+      onMetadataChange: (m) => {
+        inventMeta = m as Record<string, unknown>;
+      },
+    },
+  );
+  assert(
+    "invented start_at → SLOT_NOT_OFFERED",
+    inventedSlot.error_code === "SLOT_NOT_OFFERED",
+    JSON.stringify(inventedSlot.result),
   );
 }
 
@@ -127,8 +596,8 @@ async function dbToolTests() {
     `);
     if (pastoreFlag.rows[0]) {
       assert(
-        "Pastore tools remain false",
-        pastoreFlag.rows[0].clinic_appointment_tools_enabled === false,
+        "Pastore agent enabled remains false",
+        pastoreFlag.rows[0].enabled === false,
       );
     } else {
       console.log("NOTE no ai_agent_settings for Pastore");
@@ -191,7 +660,91 @@ async function dbToolTests() {
     );
     const slot = avail.ok ? avail.data.slots[0]! : null;
 
+    // LLM inventó 2023; backend resuelve desde mensaje → 2026-09-28 + morning
+    let availMeta: Record<string, unknown> = {};
+    const recoveredAvail = await executeClinicAppointmentTool(
+      "clinic_get_availability",
+      JSON.stringify({
+        resource_id: resourceId,
+        date: "2023-09-25",
+        time_preference: "morning",
+      }),
+      {
+        trusted: ctx,
+        industry: "clinic",
+        clinicAppointmentToolsEnabled: true,
+        latestUserMessage: "El próximo lunes por la mañana",
+        metadata: availMeta,
+        serviceCatalog: ["Rinomodelación"],
+        now: NOW_THU,
+        onMetadataChange: (m) => {
+          availMeta = m as Record<string, unknown>;
+        },
+      },
+    );
+    const recoveredResult = recoveredAvail.result as {
+      ok?: boolean;
+      date?: string;
+      slots?: unknown[];
+    };
+    assert(
+      "recovered availability date 2026-09-28",
+      recoveredAvail.success && recoveredResult.date === "2026-09-28",
+      JSON.stringify(recoveredAvail.result),
+    );
+    assert(
+      "morning preference kept",
+      Array.isArray(recoveredResult.slots) && recoveredResult.slots.length > 0,
+    );
+    const intentDate = (
+      availMeta as {
+        appointment_intent?: { requested_date?: string };
+      }
+    ).appointment_intent?.requested_date;
+    assert(
+      "requested_date persisted validated 2026-09-28",
+      intentDate === "2026-09-28",
+      intentDate ?? "",
+    );
+
+    // resource_name as resource_id → reuse UUID from intent (no RESOURCE_NOT_FOUND)
+    let nameMeta: Record<string, unknown> = {
+      appointment_intent: {
+        action: "create",
+        resource_id: resourceId,
+        resource_name: "Dra Test",
+        service_name: "Diseño",
+      },
+    };
+    const byName = await executeClinicAppointmentTool(
+      "clinic_get_availability",
+      JSON.stringify({
+        resource_id: "Dra Test",
+        date_expression: "el próximo lunes",
+        time_preference: "morning",
+      }),
+      {
+        trusted: ctx,
+        industry: "clinic",
+        clinicAppointmentToolsEnabled: true,
+        latestUserMessage: "El próximo lunes por la mañana",
+        metadata: nameMeta,
+        serviceCatalog: ["Diseño"],
+        now: NOW_THU,
+        onMetadataChange: (m) => {
+          nameMeta = m as Record<string, unknown>;
+        },
+      },
+    );
+    const byNameResult = byName.result as { ok?: boolean; date?: string };
+    assert(
+      "resource name reuses intent UUID",
+      byName.success && byNameResult.date === "2026-09-28",
+      JSON.stringify(byName.result),
+    );
+
     let meta = {};
+    const catalog = ["Diseño", "Diseño de sonrisa"];
     const noConfirm = await executeClinicAppointmentTool(
       "clinic_create_appointment",
       JSON.stringify({
@@ -207,6 +760,7 @@ async function dbToolTests() {
         clinicAppointmentToolsEnabled: true,
         latestUserMessage: "Quiero a las 9",
         metadata: meta,
+        serviceCatalog: catalog,
         onMetadataChange: (m) => {
           meta = m;
         },
@@ -215,6 +769,31 @@ async function dbToolTests() {
     assert(
       "create without confirm blocked",
       !noConfirm.success && noConfirm.error_code === "NEEDS_CONFIRMATION",
+    );
+
+    const invented = await executeClinicAppointmentTool(
+      "clinic_create_appointment",
+      JSON.stringify({
+        resource_id: resourceId,
+        service_name: "Tratamiento inventado XYZ",
+        start_at: slot!.start_at,
+        end_at: slot!.end_at,
+        patient_confirmed: true,
+      }),
+      {
+        trusted: ctx,
+        industry: "clinic",
+        clinicAppointmentToolsEnabled: true,
+        latestUserMessage: "Sí, confirmo",
+        metadata: {},
+        serviceCatalog: catalog,
+        onMetadataChange: () => undefined,
+      },
+    );
+    assert(
+      "invented service blocked",
+      !invented.success && invented.error_code === "SERVICE_NOT_IN_KNOWLEDGE",
+      JSON.stringify(invented.result),
     );
 
     const created = await executeClinicAppointmentTool(
@@ -232,6 +811,7 @@ async function dbToolTests() {
         clinicAppointmentToolsEnabled: true,
         latestUserMessage: "Sí, confirmo",
         metadata: meta,
+        serviceCatalog: catalog,
         onMetadataChange: (m) => {
           meta = m;
         },
@@ -274,6 +854,7 @@ async function dbToolTests() {
         clinicAppointmentToolsEnabled: true,
         latestUserMessage: "Quiero cancelar",
         metadata: {},
+        serviceCatalog: catalog,
         onMetadataChange: () => undefined,
       },
     );
@@ -291,6 +872,7 @@ async function dbToolTests() {
         clinicAppointmentToolsEnabled: false,
         latestUserMessage: "horarios",
         metadata: {},
+        serviceCatalog: catalog,
         onMetadataChange: () => undefined,
       },
     );
@@ -326,6 +908,7 @@ async function dbToolTests() {
         clinicAppointmentToolsEnabled: true,
         latestUserMessage: "Sí, cancelala",
         metadata: {},
+        serviceCatalog: catalog,
         onMetadataChange: () => undefined,
       },
     );

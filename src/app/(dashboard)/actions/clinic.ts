@@ -9,6 +9,7 @@ import {
 } from "@/lib/clinic/errors";
 import { formatAppointmentRange } from "@/lib/clinic/timezone-display";
 import * as appointmentService from "@/services/clinic/appointment.service";
+import * as clinicServicesService from "@/services/clinic/services.service";
 import * as contactsRepository from "@/repositories/contacts.repository";
 import * as businessService from "@/services/business/business.service";
 
@@ -20,12 +21,9 @@ export type ClinicFormState = {
   summary?: string;
 };
 
-function fromServiceFail(
-  result: Extract<
-    Awaited<ReturnType<typeof appointmentService.createAppointment>>,
-    { ok: false }
-  >,
-): ClinicFormState {
+type ClinicServiceFail = { ok: false; error: string; code?: ClinicErrorCode; field?: string };
+
+function fromServiceFail(result: ClinicServiceFail): ClinicFormState {
   return {
     error: result.error,
     code: result.code,
@@ -153,9 +151,12 @@ export async function createClinicAppointmentAction(
     };
   }
 
+  const serviceIdRaw = String(formData.get("service_id") ?? "").trim();
+
   const result = await appointmentService.createAppointment({
     contact_id: contactId,
     resource_id: resourceId,
+    service_id: serviceIdRaw || undefined,
     service_name: serviceName,
     title: String(formData.get("title") ?? "") || undefined,
     start_at: startAt,
@@ -254,6 +255,8 @@ export async function cancelClinicAppointmentAction(
 export async function getClinicAvailabilityAction(input: {
   resource_id: string;
   date: string;
+  service_id?: string;
+  duration_minutes?: number;
 }): Promise<
   | {
       ok: true;
@@ -267,6 +270,16 @@ export async function getClinicAvailabilityAction(input: {
   const result = await appointmentService.getAvailability({
     resource_id: input.resource_id,
     date: input.date,
+    service_id: input.service_id,
+    duration_minutes: input.duration_minutes as
+      | 15
+      | 20
+      | 30
+      | 45
+      | 60
+      | 90
+      | 120
+      | undefined,
   });
   if (!result.ok) {
     return {
@@ -298,4 +311,68 @@ export async function listContactsForAgendaAction(): Promise<
   );
   if (error) return { ok: false, error: error.message };
   return { ok: true, contacts: data ?? [] };
+}
+
+export async function upsertClinicServiceAction(
+  _prev: ClinicFormState,
+  formData: FormData,
+): Promise<ClinicFormState> {
+  const resourceIds = formData.getAll("resource_ids").map(String);
+  let availability: clinicServicesService.UpsertClinicServicePayload["availability"];
+  const availabilityJson = String(formData.get("availability_json") ?? "").trim();
+  if (availabilityJson) {
+    try {
+      const parsed = JSON.parse(availabilityJson) as unknown;
+      if (!Array.isArray(parsed)) {
+        return { error: "Formato de disponibilidad inválido.", code: "VALIDATION" };
+      }
+      availability = parsed as clinicServicesService.UpsertClinicServicePayload["availability"];
+    } catch {
+      return { error: "Formato de disponibilidad inválido.", code: "VALIDATION" };
+    }
+  }
+
+  const initialRaw = String(formData.get("initial_consultation_service_id") ?? "").trim();
+
+  const result = await clinicServicesService.upsertService({
+    id: String(formData.get("id") ?? "") || undefined,
+    name: String(formData.get("name") ?? ""),
+    duration_minutes: Number(formData.get("duration_minutes") ?? 30) as
+      | 15
+      | 20
+      | 30
+      | 45
+      | 60
+      | 90
+      | 120,
+    requires_initial_consultation:
+      formData.get("requires_initial_consultation") === "on" ||
+      formData.get("requires_initial_consultation") === "true",
+    initial_consultation_service_id: initialRaw ? initialRaw : null,
+    use_specific_availability:
+      formData.get("use_specific_availability") === "on" ||
+      formData.get("use_specific_availability") === "true",
+    active:
+      formData.get("active") === "on" ||
+      formData.get("active") === "true",
+    admin_notes: String(formData.get("admin_notes") ?? ""),
+    resource_ids: resourceIds.filter(Boolean),
+    availability,
+  });
+  if (!result.ok) return fromServiceFail(result);
+  revalidatePath(ROUTES.servicios);
+  revalidatePath(ROUTES.agenda);
+  return { message: result.message };
+}
+
+export async function deleteClinicServiceAvailabilityAction(
+  _prev: ClinicFormState,
+  formData: FormData,
+): Promise<ClinicFormState> {
+  const result = await clinicServicesService.deleteServiceAvailability(
+    String(formData.get("id") ?? ""),
+  );
+  if (!result.ok) return fromServiceFail(result);
+  revalidatePath(ROUTES.servicios);
+  return { message: result.message };
 }

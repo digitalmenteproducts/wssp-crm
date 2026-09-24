@@ -16,7 +16,10 @@ import {
   formatTimezoneLabel,
 } from "@/lib/clinic/timezone-display";
 import { cn } from "@/lib/utils";
-import type { ClinicCalendarResource } from "@/types/clinic";
+import type {
+  ClinicCalendarResource,
+  ClinicServiceListItem,
+} from "@/types/clinic";
 
 type ContactOption = { id: string; name: string | null; phone: string };
 
@@ -26,6 +29,7 @@ const initial: ClinicFormState = {};
 
 type ClinicAppointmentFormProps = {
   resources: ClinicCalendarResource[];
+  services: ClinicServiceListItem[];
   contacts: ContactOption[];
   timezone: string;
 };
@@ -41,15 +45,17 @@ function fieldClass(hasError: boolean) {
 
 export function ClinicAppointmentForm({
   resources,
+  services,
   contacts,
   timezone,
 }: ClinicAppointmentFormProps) {
-  const activeResources = useMemo(
-    () => resources.filter((r) => r.active),
-    [resources],
+  const activeServices = useMemo(
+    () => services.filter((s) => s.active),
+    [services],
   );
 
   const [contactId, setContactId] = useState("");
+  const [serviceId, setServiceId] = useState("");
   const [resourceId, setResourceId] = useState("");
   const [serviceName, setServiceName] = useState("");
   const [date, setDate] = useState("");
@@ -75,7 +81,24 @@ export function ClinicAppointmentForm({
   const errorField = clientError?.field ?? state.field;
   const errorMessage = clientError?.error ?? state.error;
 
-  function loadSlots(nextResourceId: string, nextDate: string) {
+  const selectedService = useMemo(
+    () => activeServices.find((s) => s.id === serviceId) ?? null,
+    [activeServices, serviceId],
+  );
+
+  const filteredResources = useMemo(() => {
+    const active = resources.filter((r) => r.active);
+    if (!selectedService) return active;
+    if (selectedService.resource_ids.length === 0) return active;
+    const allowed = new Set(selectedService.resource_ids);
+    return active.filter((r) => allowed.has(r.id));
+  }, [resources, selectedService]);
+
+  function loadSlots(
+    nextServiceId: string,
+    nextResourceId: string,
+    nextDate: string,
+  ) {
     setSelectedSlot(null);
     setSlots([]);
     setAvailabilityError(null);
@@ -83,10 +106,14 @@ export function ClinicAppointmentForm({
 
     if (!nextResourceId || !nextDate) return;
 
+    const svc = activeServices.find((s) => s.id === nextServiceId);
+
     startSlotsTransition(async () => {
       const result = await getClinicAvailabilityAction({
         resource_id: nextResourceId,
         date: nextDate,
+        service_id: nextServiceId || undefined,
+        duration_minutes: svc?.duration_minutes,
       });
       if (!result.ok) {
         setSlots([]);
@@ -117,7 +144,7 @@ export function ClinicAppointmentForm({
     contacts.find((c) => c.id === contactId)?.phone ||
     "Paciente";
   const resourceLabel =
-    activeResources.find((r) => r.id === resourceId)?.name ||
+    filteredResources.find((r) => r.id === resourceId)?.name ||
     resourceName ||
     "Profesional";
 
@@ -126,6 +153,13 @@ export function ClinicAppointmentForm({
       setClientError({
         field: "contact_id",
         error: clinicErrorMessage("MISSING_CONTACT"),
+      });
+      return false;
+    }
+    if (!serviceId && !serviceName.trim()) {
+      setClientError({
+        field: "service_id",
+        error: clinicErrorMessage("MISSING_SERVICE"),
       });
       return false;
     }
@@ -221,40 +255,85 @@ export function ClinicAppointmentForm({
       </div>
 
       <div className="space-y-1">
+        <Label htmlFor="service_id">Servicio / tratamiento *</Label>
+        {activeServices.length > 0 ? (
+          <select
+            id="service_id"
+            value={serviceId}
+            onChange={(e) => {
+              const value = e.target.value;
+              setServiceId(value);
+              const svc = activeServices.find((s) => s.id === value);
+              setServiceName(svc?.name ?? "");
+              setResourceId("");
+              setSelectedSlot(null);
+              setSlots([]);
+            }}
+            className={fieldClass(
+              errorField === "service_id" || errorField === "service_name",
+            )}
+          >
+            <option value="">Seleccionar…</option>
+            {activeServices.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name} ({s.duration_minutes} min)
+              </option>
+            ))}
+          </select>
+        ) : (
+          <Input
+            id="service_name"
+            name="service_name"
+            value={serviceName}
+            onChange={(e) => setServiceName(e.target.value)}
+            placeholder="Nombre del tratamiento"
+            className={fieldClass(errorField === "service_name")}
+          />
+        )}
+        {activeServices.length > 0 ? (
+          <input type="hidden" name="service_name" value={serviceName} />
+        ) : null}
+        {serviceId ? (
+          <input type="hidden" name="service_id" value={serviceId} />
+        ) : null}
+        {(errorField === "service_id" || errorField === "service_name") &&
+        errorMessage ? (
+          <p className="text-xs text-destructive">{errorMessage}</p>
+        ) : null}
+        {activeServices.length === 0 ? (
+          <p className="text-xs text-secondary">
+            Configura servicios en el módulo Servicios o escribe el nombre manualmente.
+          </p>
+        ) : null}
+      </div>
+
+      <div className="space-y-1">
         <Label htmlFor="resource_id">Profesional *</Label>
         <select
           id="resource_id"
           name="resource_id"
           value={resourceId}
+          disabled={activeServices.length > 0 && !serviceId}
           onChange={(e) => {
             const value = e.target.value;
             setResourceId(value);
-            loadSlots(value, date);
+            loadSlots(serviceId, value, date);
           }}
           className={fieldClass(errorField === "resource_id")}
         >
           <option value="">Seleccionar…</option>
-          {activeResources.map((r) => (
+          {filteredResources.map((r) => (
             <option key={r.id} value={r.id}>
               {r.name}
             </option>
           ))}
         </select>
-        {errorField === "resource_id" && errorMessage ? (
-          <p className="text-xs text-destructive">{errorMessage}</p>
+        {activeServices.length > 0 && serviceId && filteredResources.length === 0 ? (
+          <p className="text-xs text-destructive">
+            Este servicio no tiene profesionales asignados.
+          </p>
         ) : null}
-      </div>
-
-      <div className="space-y-1">
-        <Label htmlFor="service_name">Servicio / tratamiento *</Label>
-        <Input
-          id="service_name"
-          name="service_name"
-          value={serviceName}
-          onChange={(e) => setServiceName(e.target.value)}
-          className={fieldClass(errorField === "service_name")}
-        />
-        {errorField === "service_name" && errorMessage ? (
+        {errorField === "resource_id" && errorMessage ? (
           <p className="text-xs text-destructive">{errorMessage}</p>
         ) : null}
       </div>
@@ -269,7 +348,7 @@ export function ClinicAppointmentForm({
           onChange={(e) => {
             const value = e.target.value;
             setDate(value);
-            loadSlots(resourceId, value);
+            loadSlots(serviceId, resourceId, value);
           }}
           className={fieldClass(errorField === "date")}
         />
@@ -280,7 +359,11 @@ export function ClinicAppointmentForm({
 
       <div className="space-y-2">
         <Label>Horario disponible *</Label>
-        {!resourceId || !date ? (
+        {!serviceId && activeServices.length > 0 ? (
+          <p className="text-xs text-secondary">
+            Selecciona un servicio para continuar.
+          </p>
+        ) : !resourceId || !date ? (
           <p className="text-xs text-secondary">
             Selecciona profesional y fecha para ver horarios.
           </p>

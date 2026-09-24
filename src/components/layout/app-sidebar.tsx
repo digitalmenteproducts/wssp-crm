@@ -4,6 +4,7 @@ import {
   Bot,
   Building2,
   CalendarDays,
+  ClipboardList,
   FileText,
   HelpCircle,
   LayoutDashboard,
@@ -49,7 +50,10 @@ export function AppSidebar({ industry = "other" }: AppSidebarProps) {
       icon: Users,
     },
     ...(hasClinicAgenda(industry)
-      ? [{ href: ROUTES.agenda, label: "Agenda", icon: CalendarDays }]
+      ? [
+          { href: ROUTES.agenda, label: "Agenda", icon: CalendarDays },
+          { href: ROUTES.servicios, label: "Servicios", icon: ClipboardList },
+        ]
       : []),
     { href: ROUTES.segmentos, label: "Segmentos", icon: Layers },
     { href: ROUTES.plantillas, label: "Plantillas", icon: FileText },

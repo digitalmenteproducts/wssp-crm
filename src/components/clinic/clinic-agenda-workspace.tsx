@@ -25,6 +25,7 @@ import type {
   ClinicAvailability,
   ClinicCalendarResource,
   ClinicScheduleBlock,
+  ClinicServiceListItem,
 } from "@/types/clinic";
 
 const initial: ClinicFormState = {};
@@ -43,6 +44,7 @@ type ContactOption = { id: string; name: string | null; phone: string };
 
 type ClinicAgendaWorkspaceProps = {
   resources: ClinicCalendarResource[];
+  services: ClinicServiceListItem[];
   availability: ClinicAvailability[];
   blocks: ClinicScheduleBlock[];
   appointments: ClinicAppointmentListItem[];
@@ -68,6 +70,7 @@ function FeedbackBanner({ state }: { state: ClinicFormState }) {
 
 export function ClinicAgendaWorkspace({
   resources,
+  services,
   availability,
   blocks,
   appointments,
@@ -154,6 +157,7 @@ export function ClinicAgendaWorkspace({
         <div className="grid gap-6 lg:grid-cols-2">
           <ClinicAppointmentForm
             resources={resources}
+            services={services}
             contacts={contacts}
             timezone={timezone}
           />

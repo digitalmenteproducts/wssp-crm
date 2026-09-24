@@ -4,6 +4,7 @@ import {
   mapTechnicalError,
   type ClinicErrorCode,
 } from "@/lib/clinic/errors";
+import { buildServiceBookingContext } from "@/lib/clinic/resolve-service-booking";
 import * as clinicRepository from "@/repositories/clinic.repository";
 import * as businessService from "@/services/business/business.service";
 import {
@@ -321,6 +322,7 @@ export async function getAvailability(
 
   const dayStart = zonedLocalToUtcIso(parsed.data.date, "00:00", timezone);
   const dayEnd = zonedLocalToUtcIso(parsed.data.date, "23:59", timezone);
+  const weekday = getWeekdayInTimeZone(parsed.data.date, timezone);
 
   const [weekly, appointments, blocks] = await Promise.all([
     clinicRepository.listAvailability(businessId, parsed.data.resource_id),
@@ -343,23 +345,59 @@ export async function getAvailability(
   }
   if (blocks.error) return fail("GENERIC", undefined, blocks.error.message);
 
-  const weeklyRows = weekly.data ?? [];
-  const weekday = getWeekdayInTimeZone(parsed.data.date, timezone);
+  let weeklyRows = weekly.data ?? [];
+  let durationOverride = parsed.data.duration_minutes;
+
+  if (parsed.data.service_id) {
+    const [serviceRes, linksRes, svcAvailRes] = await Promise.all([
+      clinicRepository.getService(businessId, parsed.data.service_id),
+      clinicRepository.listServiceResourceLinks(
+        businessId,
+        parsed.data.service_id,
+      ),
+      clinicRepository.listServiceAvailability(
+        businessId,
+        parsed.data.service_id,
+      ),
+    ]);
+    if (serviceRes.error) {
+      return fail("GENERIC", undefined, serviceRes.error.message);
+    }
+    if (linksRes.error) {
+      return fail("GENERIC", undefined, linksRes.error.message);
+    }
+    if (svcAvailRes.error) {
+      return fail("GENERIC", undefined, svcAvailRes.error.message);
+    }
+
+    const booking = buildServiceBookingContext({
+      service: serviceRes.data,
+      resourceId: parsed.data.resource_id,
+      dayOfWeek: weekday,
+      resourceWeekly: weeklyRows,
+      links: linksRes.data ?? [],
+      serviceAvailability: svcAvailRes.data ?? [],
+    });
+    if (!booking.ok) {
+      return fail(booking.code, "service_id");
+    }
+    weeklyRows = booking.data.weekly;
+    durationOverride = booking.data.durationMinutes as typeof durationOverride;
+  }
+
   const dayWindows = weeklyRows.filter(
     (row) => row.active && row.day_of_week === weekday,
   );
   const hasWeeklyForDay = dayWindows.length > 0;
   const durationMinutes =
-    parsed.data.duration_minutes ??
-    dayWindows[0]?.slot_duration_minutes ??
-    null;
+    durationOverride ?? dayWindows[0]?.slot_duration_minutes ?? null;
 
   const slots = internalCalendarProvider.getAvailability({
     businessId,
     resourceId: parsed.data.resource_id,
     date: parsed.data.date,
     timezone,
-    durationMinutes: parsed.data.duration_minutes,
+    durationMinutes: durationOverride,
     weekly: weeklyRows,
     appointments: appointments.data ?? [],
     blocks: blocks.data ?? [],
@@ -425,6 +463,9 @@ export async function createAppointment(
     new Date(parsed.data.end_at).getTime() + 12 * 3600_000,
   ).toISOString();
 
+  const dateYmd = utcIsoToDateYmd(parsed.data.start_at, timezone);
+  const weekday = getWeekdayInTimeZone(dateYmd, timezone);
+
   const [weekly, appointments, blocks] = await Promise.all([
     clinicRepository.listAvailability(businessId, parsed.data.resource_id),
     clinicRepository.listActiveAppointmentsInRange(
@@ -445,6 +486,46 @@ export async function createAppointment(
   }
   if (blocks.error) return fail("GENERIC", undefined, blocks.error.message);
 
+  let weeklyRows = weekly.data ?? [];
+  let serviceId: string | null = parsed.data.service_id ?? null;
+  let serviceNameSnapshot = parsed.data.service_name.trim();
+  let durationOverride: 15 | 20 | 30 | 45 | 60 | 90 | 120 | undefined;
+
+  if (serviceId) {
+    const [serviceRes, linksRes, svcAvailRes] = await Promise.all([
+      clinicRepository.getService(businessId, serviceId),
+      clinicRepository.listServiceResourceLinks(businessId, serviceId),
+      clinicRepository.listServiceAvailability(businessId, serviceId),
+    ]);
+    if (serviceRes.error) {
+      return fail("GENERIC", undefined, serviceRes.error.message);
+    }
+    if (linksRes.error) {
+      return fail("GENERIC", undefined, linksRes.error.message);
+    }
+    if (svcAvailRes.error) {
+      return fail("GENERIC", undefined, svcAvailRes.error.message);
+    }
+
+    const booking = buildServiceBookingContext({
+      service: serviceRes.data,
+      resourceId: parsed.data.resource_id,
+      dayOfWeek: weekday,
+      resourceWeekly: weeklyRows,
+      links: linksRes.data ?? [],
+      serviceAvailability: svcAvailRes.data ?? [],
+      // Manual UI may book valuation or treatment; consultation gate is AI-only.
+      refuseIfRequiresConsultation: false,
+    });
+    if (!booking.ok) {
+      return fail(booking.code, "service_id");
+    }
+    weeklyRows = booking.data.weekly;
+    durationOverride = booking.data.durationMinutes as typeof durationOverride;
+    serviceNameSnapshot = booking.data.service.name;
+    serviceId = booking.data.service.id;
+  }
+
   const conflict = classifyBusyConflict({
     startAt: parsed.data.start_at,
     endAt: parsed.data.end_at,
@@ -454,9 +535,6 @@ export async function createAppointment(
   if (conflict) {
     return fail(conflict, "slot");
   }
-
-  // Segunda validación: el slot debe coincidir con disponibilidad real del día.
-  const dateYmd = utcIsoToDateYmd(parsed.data.start_at, timezone);
 
   const durationMinutes = Math.round(
     (new Date(parsed.data.end_at).getTime() -
@@ -469,16 +547,17 @@ export async function createAppointment(
     resourceId: parsed.data.resource_id,
     date: dateYmd,
     timezone,
-    durationMinutes: ([15, 20, 30, 45, 60, 90, 120].includes(durationMinutes)
-      ? durationMinutes
-      : undefined) as 15 | 20 | 30 | 45 | 60 | 90 | 120 | undefined,
-    weekly: weekly.data ?? [],
+    durationMinutes:
+      durationOverride ??
+      (([15, 20, 30, 45, 60, 90, 120].includes(durationMinutes)
+        ? durationMinutes
+        : undefined) as 15 | 20 | 30 | 45 | 60 | 90 | 120 | undefined),
+    weekly: weeklyRows,
     appointments: appointments.data ?? [],
     blocks: blocks.data ?? [],
   });
 
-  const weekday = getWeekdayInTimeZone(dateYmd, timezone);
-  const hasWeekly = (weekly.data ?? []).some(
+  const hasWeekly = weeklyRows.some(
     (row) => row.active && row.day_of_week === weekday,
   );
   if (!hasWeekly) {
@@ -497,15 +576,14 @@ export async function createAppointment(
   }
 
   const title =
-    parsed.data.title?.trim() ||
-    parsed.data.service_name.trim() ||
-    "Cita";
+    parsed.data.title?.trim() || serviceNameSnapshot || "Cita";
 
   const { data, error } = await clinicRepository.insertAppointment(businessId, {
     contact_id: parsed.data.contact_id,
     resource_id: parsed.data.resource_id,
     title,
-    service_name: parsed.data.service_name.trim(),
+    service_name: serviceNameSnapshot,
+    service_id: serviceId,
     start_at: parsed.data.start_at,
     end_at: parsed.data.end_at,
     status: parsed.data.status,
@@ -694,6 +772,8 @@ export {
   getAppointmentTrusted,
   getAvailabilityTrusted,
   listActiveResourcesTrusted,
+  listActiveServicesTrusted,
+  listCompatibleResourcesTrusted,
   listPatientAppointmentsTrusted,
   rescheduleAppointmentTrusted,
   type ClinicTrustedContext,

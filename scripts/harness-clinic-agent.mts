@@ -1,11 +1,13 @@
 /**
- * Harness DEV: simula un turno del Agente IA SIN WhatsApp.
+ * Harness DEV: simula turnos del Agente IA SIN WhatsApp (multi-turn).
  *
- * Uso:
- *   npx tsx scripts/harness-clinic-agent.mts --business <uuid> --contact <uuid> --message "Quiero una cita"
+ * Primer turno:
+ *   npx tsx scripts/harness-clinic-agent.mts --business <uuid> --contact <uuid> --message "..."
  *
- * Respeta flags reales (enabled + clinic_appointment_tools_enabled).
- * NO activa nada automáticamente.
+ * Turnos siguientes (reutiliza conversación + appointment_intent):
+ *   npx tsx scripts/harness-clinic-agent.mts --business <uuid> --contact <uuid> --conversation <uuid> --message "..."
+ *
+ * Respeta flags reales. NO activa enabled. NO envía WhatsApp.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -60,5 +62,35 @@ const result = await simulateAgentTurnWithoutWhatsApp({
   conversationId: conversationId ?? null,
 });
 
-console.log(JSON.stringify(result, null, 2));
-if (!result.ok) process.exit(1);
+if (!result.ok) {
+  console.log(JSON.stringify(result, null, 2));
+  process.exit(1);
+}
+
+const summary = {
+  ok: true,
+  conversationId: result.conversationId,
+  clinicToolsEligible: result.clinicToolsEligible,
+  model: result.model,
+  reply: result.result.reply,
+  should_handoff: result.result.should_handoff,
+  confidence: result.result.confidence,
+  serviceResolution: result.serviceResolution,
+  tools: result.toolTrace.map((t) => ({
+    name: t.name,
+    arguments: (() => {
+      try {
+        return JSON.parse(t.arguments) as unknown;
+      } catch {
+        return t.arguments;
+      }
+    })(),
+    result: t.result,
+  })),
+  appointment_intent: result.appointment_intent ?? null,
+  tip: conversationId
+    ? undefined
+    : `Siguiente turno: añade --conversation ${result.conversationId}`,
+};
+
+console.log(JSON.stringify(summary, null, 2));

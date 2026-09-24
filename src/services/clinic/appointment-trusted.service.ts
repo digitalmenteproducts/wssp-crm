@@ -11,6 +11,7 @@ import {
   type ClinicErrorCode,
 } from "@/lib/clinic/errors";
 import { utcIsoToDateYmd } from "@/lib/clinic/datetime";
+import { buildServiceBookingContext } from "@/lib/clinic/resolve-service-booking";
 import { formatSlotClock } from "@/lib/clinic/timezone-display";
 import * as clinicAdmin from "@/repositories/clinic-admin.repository";
 import {
@@ -24,6 +25,7 @@ import type {
   ClinicAppointmentListItem,
   ClinicAppointmentSource,
   ClinicCalendarResource,
+  ClinicService,
 } from "@/types/clinic";
 
 export type ClinicTrustedContext = {
@@ -98,11 +100,45 @@ export async function listActiveResourcesTrusted(
   };
 }
 
+export async function listActiveServicesTrusted(
+  ctx: Pick<ClinicTrustedContext, "businessId">,
+): Promise<TrustedActionResult<ClinicService[]>> {
+  const { data, error } = await clinicAdmin.listServicesAdmin(ctx.businessId);
+  if (error) return fail("GENERIC", error.message);
+  return {
+    ok: true,
+    data: (data ?? []).filter((s) => s.active),
+  };
+}
+
+export async function listCompatibleResourcesTrusted(
+  ctx: Pick<ClinicTrustedContext, "businessId">,
+  serviceId: string,
+): Promise<TrustedActionResult<ClinicCalendarResource[]>> {
+  const [resources, links] = await Promise.all([
+    clinicAdmin.listResourcesAdmin(ctx.businessId),
+    clinicAdmin.listServiceResourceLinksAdmin(ctx.businessId, serviceId),
+  ]);
+  if (resources.error) return fail("GENERIC", resources.error.message);
+  if (links.error) return fail("GENERIC", links.error.message);
+
+  const active = (resources.data ?? []).filter((r) => r.active);
+  const linkedIds = new Set((links.data ?? []).map((l) => l.resource_id));
+  if (linkedIds.size === 0) {
+    return { ok: true, data: active };
+  }
+  return {
+    ok: true,
+    data: active.filter((r) => linkedIds.has(r.id)),
+  };
+}
+
 export async function getAvailabilityTrusted(
   ctx: ClinicTrustedContext,
   input: {
     resource_id: string;
     date: string;
+    service_id?: string | null;
     time_preference?: "morning" | "afternoon" | "evening" | null;
   },
 ): Promise<
@@ -111,6 +147,8 @@ export async function getAvailabilityTrusted(
     hasWeeklyForDay: boolean;
     resourceName: string;
     durationMinutes: number | null;
+    serviceId: string | null;
+    serviceName: string | null;
   }>
 > {
   const resource = await clinicAdmin.getResourceAdmin(
@@ -123,6 +161,7 @@ export async function getAvailabilityTrusted(
   const dayStart = zonedLocalToUtcIso(input.date, "00:00", ctx.timezone);
   const dayEnd = zonedLocalToUtcIso(input.date, "23:59", ctx.timezone);
   const rangeTo = new Date(new Date(dayEnd).getTime() + 60_000).toISOString();
+  const weekday = getWeekdayInTimeZone(input.date, ctx.timezone);
 
   const [weekly, appointments, blocks] = await Promise.all([
     clinicAdmin.listAvailabilityAdmin(ctx.businessId, input.resource_id),
@@ -143,19 +182,59 @@ export async function getAvailabilityTrusted(
   if (appointments.error) return fail("GENERIC", appointments.error.message);
   if (blocks.error) return fail("GENERIC", blocks.error.message);
 
-  const weeklyRows = weekly.data ?? [];
-  const weekday = getWeekdayInTimeZone(input.date, ctx.timezone);
+  let weeklyRows = weekly.data ?? [];
+  let durationMinutes: number | null =
+    weeklyRows.find((r) => r.active && r.day_of_week === weekday)
+      ?.slot_duration_minutes ?? null;
+  let serviceId: string | null = null;
+  let serviceName: string | null = null;
+  let durationOverride: 15 | 20 | 30 | 45 | 60 | 90 | 120 | undefined;
+
+  if (input.service_id) {
+    const [serviceRes, linksRes, svcAvailRes] = await Promise.all([
+      clinicAdmin.getServiceAdmin(ctx.businessId, input.service_id),
+      clinicAdmin.listServiceResourceLinksAdmin(
+        ctx.businessId,
+        input.service_id,
+      ),
+      clinicAdmin.listServiceAvailabilityAdmin(
+        ctx.businessId,
+        input.service_id,
+      ),
+    ]);
+    if (serviceRes.error) return fail("GENERIC", serviceRes.error.message);
+    if (linksRes.error) return fail("GENERIC", linksRes.error.message);
+    if (svcAvailRes.error) return fail("GENERIC", svcAvailRes.error.message);
+
+    const booking = buildServiceBookingContext({
+      service: serviceRes.data,
+      resourceId: input.resource_id,
+      dayOfWeek: weekday,
+      resourceWeekly: weeklyRows,
+      links: linksRes.data ?? [],
+      serviceAvailability: svcAvailRes.data ?? [],
+      refuseIfRequiresConsultation: true,
+    });
+    if (!booking.ok) return fail(booking.code);
+
+    weeklyRows = booking.data.weekly;
+    durationMinutes = booking.data.durationMinutes;
+    durationOverride = booking.data.durationMinutes as typeof durationOverride;
+    serviceId = booking.data.service.id;
+    serviceName = booking.data.service.name;
+  }
+
   const dayWindows = weeklyRows.filter(
     (row) => row.active && row.day_of_week === weekday,
   );
   const hasWeeklyForDay = dayWindows.length > 0;
-  const durationMinutes = dayWindows[0]?.slot_duration_minutes ?? null;
 
   let slots = internalCalendarProvider.getAvailability({
     businessId: ctx.businessId,
     resourceId: input.resource_id,
     date: input.date,
     timezone: ctx.timezone,
+    durationMinutes: durationOverride,
     weekly: weeklyRows,
     appointments: appointments.data ?? [],
     blocks: blocks.data ?? [],
@@ -188,6 +267,8 @@ export async function getAvailabilityTrusted(
       hasWeeklyForDay,
       resourceName: resource.data.name,
       durationMinutes,
+      serviceId,
+      serviceName,
     },
   };
 }
@@ -198,6 +279,7 @@ async function assertSlotStillAvailable(
     resource_id: string;
     start_at: string;
     end_at: string;
+    service_id?: string | null;
     ignoreAppointmentId?: string;
   },
 ): Promise<TrustedActionResult> {
@@ -248,7 +330,41 @@ async function assertSlotStillAvailable(
 
   const dateYmd = utcIsoToDateYmd(input.start_at, ctx.timezone);
   const weekday = getWeekdayInTimeZone(dateYmd, ctx.timezone);
-  const hasWeekly = (weekly.data ?? []).some(
+
+  let weeklyRows = weekly.data ?? [];
+  let durationOverride: 15 | 20 | 30 | 45 | 60 | 90 | 120 | undefined;
+
+  if (input.service_id) {
+    const [serviceRes, linksRes, svcAvailRes] = await Promise.all([
+      clinicAdmin.getServiceAdmin(ctx.businessId, input.service_id),
+      clinicAdmin.listServiceResourceLinksAdmin(
+        ctx.businessId,
+        input.service_id,
+      ),
+      clinicAdmin.listServiceAvailabilityAdmin(
+        ctx.businessId,
+        input.service_id,
+      ),
+    ]);
+    if (serviceRes.error) return fail("GENERIC", serviceRes.error.message);
+    if (linksRes.error) return fail("GENERIC", linksRes.error.message);
+    if (svcAvailRes.error) return fail("GENERIC", svcAvailRes.error.message);
+
+    const booking = buildServiceBookingContext({
+      service: serviceRes.data,
+      resourceId: input.resource_id,
+      dayOfWeek: weekday,
+      resourceWeekly: weeklyRows,
+      links: linksRes.data ?? [],
+      serviceAvailability: svcAvailRes.data ?? [],
+      refuseIfRequiresConsultation: true,
+    });
+    if (!booking.ok) return fail(booking.code);
+    weeklyRows = booking.data.weekly;
+    durationOverride = booking.data.durationMinutes as typeof durationOverride;
+  }
+
+  const hasWeekly = weeklyRows.some(
     (row) => row.active && row.day_of_week === weekday,
   );
   if (!hasWeekly) return fail("NO_WEEKLY_AVAILABILITY");
@@ -262,10 +378,12 @@ async function assertSlotStillAvailable(
     resourceId: input.resource_id,
     date: dateYmd,
     timezone: ctx.timezone,
-    durationMinutes: ([15, 20, 30, 45, 60, 90, 120].includes(durationMinutes)
-      ? durationMinutes
-      : undefined) as 15 | 20 | 30 | 45 | 60 | 90 | 120 | undefined,
-    weekly: weekly.data ?? [],
+    durationMinutes:
+      durationOverride ??
+      (([15, 20, 30, 45, 60, 90, 120].includes(durationMinutes)
+        ? durationMinutes
+        : undefined) as 15 | 20 | 30 | 45 | 60 | 90 | 120 | undefined),
+    weekly: weeklyRows,
     appointments: appointments.data ?? [],
     blocks: blocks.data ?? [],
   });
@@ -285,28 +403,44 @@ export async function createAppointmentTrusted(
   ctx: ClinicTrustedContext,
   input: {
     resource_id: string;
-    service_name: string;
+    service_id: string;
+    service_name?: string;
     start_at: string;
     end_at: string;
     title?: string;
     source?: ClinicAppointmentSource;
   },
 ): Promise<TrustedActionResult<ClinicAppointment>> {
+  if (!input.service_id) return fail("MISSING_SERVICE");
+
+  const serviceRes = await clinicAdmin.getServiceAdmin(
+    ctx.businessId,
+    input.service_id,
+  );
+  if (serviceRes.error || !serviceRes.data) return fail("SERVICE_NOT_FOUND");
+  if (!serviceRes.data.active) return fail("SERVICE_INACTIVE");
+  if (serviceRes.data.requires_initial_consultation) {
+    return fail("SERVICE_REQUIRES_CONSULTATION");
+  }
+
   const check = await assertSlotStillAvailable(ctx, {
     resource_id: input.resource_id,
     start_at: input.start_at,
     end_at: input.end_at,
+    service_id: input.service_id,
   });
   if (!check.ok) return check;
 
-  const title = input.title?.trim() || input.service_name.trim() || "Cita";
+  const serviceName = serviceRes.data.name;
+  const title = input.title?.trim() || serviceName || "Cita";
   const { data, error } = await clinicAdmin.insertAppointmentAdmin(
     ctx.businessId,
     {
       contact_id: ctx.contactId,
       resource_id: input.resource_id,
       title,
-      service_name: input.service_name.trim(),
+      service_name: serviceName,
+      service_id: serviceRes.data.id,
       start_at: input.start_at,
       end_at: input.end_at,
       status: "confirmed",
