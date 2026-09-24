@@ -98,6 +98,17 @@ export async function listBoardContactRows(businessId: string) {
   };
 }
 
+export async function listContactsSimple(businessId: string) {
+  const supabase = await createClient();
+  return supabase
+    .from("contacts")
+    .select("id, name, phone")
+    .eq("business_id", businessId)
+    .order("name", { ascending: true, nullsFirst: false })
+    .limit(500)
+    .returns<Array<{ id: string; name: string | null; phone: string }>>();
+}
+
 export async function updateContactStatusForMember(input: {
   businessId: string;
   contactId: string;

@@ -1,3 +1,16 @@
+export const BUSINESS_INDUSTRIES = [
+  "clinic",
+  "restaurant",
+  "ecommerce",
+  "real_estate",
+  "legal",
+  "tourism",
+  "services",
+  "other",
+] as const;
+
+export type BusinessIndustry = (typeof BUSINESS_INDUSTRIES)[number];
+
 export type BusinessRole = "owner" | "admin" | "member";
 
 export type Business = {
@@ -6,6 +19,7 @@ export type Business = {
   slug: string;
   support_email: string | null;
   timezone: string;
+  industry: BusinessIndustry;
   created_at: string;
   updated_at: string;
 };

@@ -136,10 +136,25 @@ export async function getWorkspaceByBusinessId(
     return { ok: false, error: "No se encontró la configuración de la empresa." };
   }
 
+  const industry =
+    business.industry &&
+    [
+      "clinic",
+      "restaurant",
+      "ecommerce",
+      "real_estate",
+      "legal",
+      "tourism",
+      "services",
+      "other",
+    ].includes(business.industry)
+      ? business.industry
+      : "other";
+
   return {
     ok: true,
     workspace: {
-      business,
+      business: { ...business, industry },
       membership,
       settings: toPublicSettings(settings),
     },

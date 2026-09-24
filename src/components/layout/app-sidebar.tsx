@@ -3,6 +3,7 @@
 import {
   Bot,
   Building2,
+  CalendarDays,
   FileText,
   HelpCircle,
   LayoutDashboard,
@@ -18,7 +19,9 @@ import type { LucideIcon } from "lucide-react";
 
 import { BrandLogo } from "@/components/layout/brand-logo";
 import { APP_NAME, ROUTES } from "@/config/app";
+import { contactsNavLabel, hasClinicAgenda } from "@/lib/industry";
 import { cn } from "@/lib/utils";
+import type { BusinessIndustry } from "@/types/business";
 
 type NavItem = {
   href: string;
@@ -26,23 +29,34 @@ type NavItem = {
   icon: LucideIcon;
 };
 
-const PRIMARY_NAV: NavItem[] = [
-  { href: ROUTES.panel, label: "Panel de Control", icon: LayoutDashboard },
-  { href: ROUTES.contactos, label: "Contactos", icon: Users },
-  { href: ROUTES.segmentos, label: "Segmentos", icon: Layers },
-  { href: ROUTES.plantillas, label: "Plantillas", icon: FileText },
-  { href: ROUTES.campanas, label: "Campañas", icon: Megaphone },
-  { href: ROUTES.agenteIa, label: "Agente IA", icon: Bot },
-  { href: ROUTES.configuracion, label: "Configuración", icon: Settings },
-];
-
 const FOOTER_NAV: NavItem[] = [
   { href: "#", label: "Ayuda", icon: HelpCircle },
   { href: "#", label: "Organización", icon: Building2 },
 ];
 
-export function AppSidebar() {
+type AppSidebarProps = {
+  industry?: BusinessIndustry;
+};
+
+export function AppSidebar({ industry = "other" }: AppSidebarProps) {
   const pathname = usePathname();
+
+  const primaryNav: NavItem[] = [
+    { href: ROUTES.panel, label: "Panel de Control", icon: LayoutDashboard },
+    {
+      href: ROUTES.contactos,
+      label: contactsNavLabel(industry),
+      icon: Users,
+    },
+    ...(hasClinicAgenda(industry)
+      ? [{ href: ROUTES.agenda, label: "Agenda", icon: CalendarDays }]
+      : []),
+    { href: ROUTES.segmentos, label: "Segmentos", icon: Layers },
+    { href: ROUTES.plantillas, label: "Plantillas", icon: FileText },
+    { href: ROUTES.campanas, label: "Campañas", icon: Megaphone },
+    { href: ROUTES.agenteIa, label: "Agente IA", icon: Bot },
+    { href: ROUTES.configuracion, label: "Configuración", icon: Settings },
+  ];
 
   return (
     <nav className="fixed top-0 left-0 z-50 flex h-full w-[260px] flex-col border-r border-white/10 bg-sidebar px-4 py-6 text-sm text-sidebar-foreground">
@@ -65,7 +79,7 @@ export function AppSidebar() {
       </Link>
 
       <div className="flex flex-1 flex-col gap-1 overflow-y-auto">
-        {PRIMARY_NAV.map((item) => {
+        {primaryNav.map((item) => {
           const active =
             pathname === item.href || pathname.startsWith(`${item.href}/`);
           const Icon = item.icon;

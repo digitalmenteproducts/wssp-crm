@@ -23,6 +23,7 @@ export const ROUTES = {
   campanas: "/campanas",
   campanasNueva: "/campanas/nueva",
   agenteIa: "/agente-ia",
+  agenda: "/agenda",
   configuracion: "/configuracion",
 } as const;
 
@@ -39,5 +40,6 @@ export const PROTECTED_PREFIXES = [
   ROUTES.plantillas,
   ROUTES.campanas,
   ROUTES.agenteIa,
+  ROUTES.agenda,
   ROUTES.configuracion,
 ] as const;
