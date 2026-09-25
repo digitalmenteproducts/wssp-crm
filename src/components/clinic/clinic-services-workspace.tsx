@@ -28,7 +28,7 @@ const DAY_LABELS = [
   "Sábado",
 ];
 
-const DURATION_OPTIONS = [15, 20, 30, 45, 60, 90, 120] as const;
+const DURATION_HINT = "Entre 5 y 240 minutos (ej. 30, 40, 60).";
 
 type AvailabilityDraft = {
   day_of_week: number;
@@ -239,10 +239,14 @@ export function ClinicServicesWorkspace({
 
             <div className="space-y-1">
               <Label htmlFor="duration_minutes">Duración (min) *</Label>
-              <select
+              <Input
                 id="duration_minutes"
                 name="duration_minutes"
+                type="number"
                 required
+                min={5}
+                max={240}
+                step={1}
                 value={draft.duration_minutes}
                 onChange={(e) =>
                   setDraft((prev) => ({
@@ -250,14 +254,8 @@ export function ClinicServicesWorkspace({
                     duration_minutes: Number(e.target.value),
                   }))
                 }
-                className="h-10 w-full rounded-lg border border-outline-variant bg-card px-3 text-sm"
-              >
-                {DURATION_OPTIONS.map((m) => (
-                  <option key={m} value={m}>
-                    {m} min
-                  </option>
-                ))}
-              </select>
+              />
+              <p className="text-xs text-muted-foreground">{DURATION_HINT}</p>
             </div>
 
             <label className="flex items-center gap-2 text-sm">

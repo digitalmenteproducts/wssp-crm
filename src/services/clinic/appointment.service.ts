@@ -382,7 +382,7 @@ export async function getAvailability(
       return fail(booking.code, "service_id");
     }
     weeklyRows = booking.data.weekly;
-    durationOverride = booking.data.durationMinutes as typeof durationOverride;
+    durationOverride = booking.data.durationMinutes;
   }
 
   const dayWindows = weeklyRows.filter(
@@ -489,7 +489,7 @@ export async function createAppointment(
   let weeklyRows = weekly.data ?? [];
   let serviceId: string | null = parsed.data.service_id ?? null;
   let serviceNameSnapshot = parsed.data.service_name.trim();
-  let durationOverride: 15 | 20 | 30 | 45 | 60 | 90 | 120 | undefined;
+  let durationOverride: number | undefined;
 
   if (serviceId) {
     const [serviceRes, linksRes, svcAvailRes] = await Promise.all([
@@ -521,7 +521,7 @@ export async function createAppointment(
       return fail(booking.code, "service_id");
     }
     weeklyRows = booking.data.weekly;
-    durationOverride = booking.data.durationMinutes as typeof durationOverride;
+    durationOverride = booking.data.durationMinutes;
     serviceNameSnapshot = booking.data.service.name;
     serviceId = booking.data.service.id;
   }
@@ -549,9 +549,9 @@ export async function createAppointment(
     timezone,
     durationMinutes:
       durationOverride ??
-      (([15, 20, 30, 45, 60, 90, 120].includes(durationMinutes)
+      (durationMinutes >= 5 && durationMinutes <= 240
         ? durationMinutes
-        : undefined) as 15 | 20 | 30 | 45 | 60 | 90 | 120 | undefined),
+        : undefined),
     weekly: weeklyRows,
     appointments: appointments.data ?? [],
     blocks: blocks.data ?? [],
@@ -688,7 +688,9 @@ export async function rescheduleAppointment(
       timezone,
       durationMinutes: ([15, 20, 30, 45, 60, 90, 120].includes(durationMinutes)
         ? durationMinutes
-        : undefined) as 15 | 20 | 30 | 45 | 60 | 90 | 120 | undefined,
+        : durationMinutes >= 5 && durationMinutes <= 240
+          ? durationMinutes
+          : undefined),
       weekly: weekly.data ?? [],
       appointments: appointments.data ?? [],
       blocks: blocks.data ?? [],

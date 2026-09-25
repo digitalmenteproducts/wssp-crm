@@ -271,15 +271,7 @@ export async function getClinicAvailabilityAction(input: {
     resource_id: input.resource_id,
     date: input.date,
     service_id: input.service_id,
-    duration_minutes: input.duration_minutes as
-      | 15
-      | 20
-      | 30
-      | 45
-      | 60
-      | 90
-      | 120
-      | undefined,
+    duration_minutes: input.duration_minutes,
   });
   if (!result.ok) {
     return {
@@ -337,14 +329,7 @@ export async function upsertClinicServiceAction(
   const result = await clinicServicesService.upsertService({
     id: String(formData.get("id") ?? "") || undefined,
     name: String(formData.get("name") ?? ""),
-    duration_minutes: Number(formData.get("duration_minutes") ?? 30) as
-      | 15
-      | 20
-      | 30
-      | 45
-      | 60
-      | 90
-      | 120,
+    duration_minutes: Number(formData.get("duration_minutes") ?? 30),
     requires_initial_consultation:
       formData.get("requires_initial_consultation") === "on" ||
       formData.get("requires_initial_consultation") === "true",

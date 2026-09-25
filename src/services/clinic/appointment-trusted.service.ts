@@ -188,7 +188,7 @@ export async function getAvailabilityTrusted(
       ?.slot_duration_minutes ?? null;
   let serviceId: string | null = null;
   let serviceName: string | null = null;
-  let durationOverride: 15 | 20 | 30 | 45 | 60 | 90 | 120 | undefined;
+  let durationOverride: number | undefined;
 
   if (input.service_id) {
     const [serviceRes, linksRes, svcAvailRes] = await Promise.all([
@@ -219,7 +219,7 @@ export async function getAvailabilityTrusted(
 
     weeklyRows = booking.data.weekly;
     durationMinutes = booking.data.durationMinutes;
-    durationOverride = booking.data.durationMinutes as typeof durationOverride;
+    durationOverride = booking.data.durationMinutes;
     serviceId = booking.data.service.id;
     serviceName = booking.data.service.name;
   }
@@ -332,7 +332,7 @@ async function assertSlotStillAvailable(
   const weekday = getWeekdayInTimeZone(dateYmd, ctx.timezone);
 
   let weeklyRows = weekly.data ?? [];
-  let durationOverride: 15 | 20 | 30 | 45 | 60 | 90 | 120 | undefined;
+  let durationOverride: number | undefined;
 
   if (input.service_id) {
     const [serviceRes, linksRes, svcAvailRes] = await Promise.all([
@@ -361,7 +361,7 @@ async function assertSlotStillAvailable(
     });
     if (!booking.ok) return fail(booking.code);
     weeklyRows = booking.data.weekly;
-    durationOverride = booking.data.durationMinutes as typeof durationOverride;
+    durationOverride = booking.data.durationMinutes;
   }
 
   const hasWeekly = weeklyRows.some(
@@ -380,9 +380,9 @@ async function assertSlotStillAvailable(
     timezone: ctx.timezone,
     durationMinutes:
       durationOverride ??
-      (([15, 20, 30, 45, 60, 90, 120].includes(durationMinutes)
+      (durationMinutes >= 5 && durationMinutes <= 240
         ? durationMinutes
-        : undefined) as 15 | 20 | 30 | 45 | 60 | 90 | 120 | undefined),
+        : undefined),
     weekly: weeklyRows,
     appointments: appointments.data ?? [],
     blocks: blocks.data ?? [],

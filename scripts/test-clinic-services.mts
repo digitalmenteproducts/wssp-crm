@@ -151,6 +151,30 @@ assert(
     ),
   );
 
+  const slots40 = computeAvailabilitySlots({
+    date: "2026-09-25",
+    timeZone: TZ,
+    durationMinutes: 40,
+    weekly,
+    appointments: [],
+    blocks: [],
+  });
+  assert(
+    "Armonía labial 40 min: primer slot 09:00–09:40",
+    slots40[0]?.start_at === zonedLocalToUtcIso("2026-09-25", "09:00", TZ) &&
+      slots40[0]?.end_at === zonedLocalToUtcIso("2026-09-25", "09:40", TZ),
+  );
+  assert(
+    "Armonía labial 40 min: siguiente inicio 09:40",
+    slots40[1]?.start_at === zonedLocalToUtcIso("2026-09-25", "09:40", TZ),
+  );
+  assert(
+    "Armonía labial 40 min: schema acepta 40",
+    (await import("../src/schemas/clinic")).clinicServiceDurationSchema.safeParse(
+      40,
+    ).success,
+  );
+
   const blocks = [
     {
       start_at: zonedLocalToUtcIso("2026-09-25", "10:00", TZ),

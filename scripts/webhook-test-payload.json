@@ -1,0 +1,35 @@
+{
+  "object": "whatsapp_business_account",
+  "entry": [
+    {
+      "id": "962678186657772",
+      "changes": [
+        {
+          "field": "messages",
+          "value": {
+            "messaging_product": "whatsapp",
+            "metadata": {
+              "display_phone_number": "15550001111",
+              "phone_number_id": "1068801936322542"
+            },
+            "contacts": [
+              {
+                "profile": { "name": "Prueba Manual" },
+                "wa_id": "584241112233"
+              }
+            ],
+            "messages": [
+              {
+                "from": "584241112233",
+                "id": "wamid.test.manual.002",
+                "timestamp": "1754390000",
+                "type": "text",
+                "text": { "body": "hola desde prueba manual" }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

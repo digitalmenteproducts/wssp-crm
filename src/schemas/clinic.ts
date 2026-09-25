@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+/** Resource weekly slot presets (agenda configuration UI). */
 export const clinicSlotDurationSchema = z.union([
   z.literal(15),
   z.literal(20),
@@ -9,6 +10,13 @@ export const clinicSlotDurationSchema = z.union([
   z.literal(90),
   z.literal(120),
 ]);
+
+/** Structured clinic_services duration — any reasonable booking length. */
+export const clinicServiceDurationSchema = z.coerce
+  .number()
+  .int()
+  .min(5, "La duración mínima es 5 minutos.")
+  .max(240, "La duración máxima es 240 minutos.");
 
 export const upsertClinicResourceSchema = z.object({
   id: z.string().uuid().optional(),
@@ -74,13 +82,13 @@ export const getAvailabilitySchema = z.object({
   resource_id: z.string().uuid(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   service_id: z.string().uuid().optional(),
-  duration_minutes: clinicSlotDurationSchema.optional(),
+  duration_minutes: clinicServiceDurationSchema.optional(),
 });
 
 export const upsertClinicServiceSchema = z.object({
   id: z.string().uuid().optional(),
   name: z.string().trim().min(1).max(120),
-  duration_minutes: clinicSlotDurationSchema.default(30),
+  duration_minutes: clinicServiceDurationSchema.default(30),
   requires_initial_consultation: z.boolean().default(false),
   initial_consultation_service_id: z.string().uuid().nullable().optional(),
   use_specific_availability: z.boolean().default(false),
