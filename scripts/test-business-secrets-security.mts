@@ -3,7 +3,7 @@
  * Uso: npx tsx scripts/test-business-secrets-security.mts
  *
  * - Nunca imprime valores de secretos (solo PASS/FAIL y conteos).
- * - Las simulaciones de rol y la fase 2 se ejecutan en transacciones con ROLLBACK.
+ * - Las simulaciones de rol y la re-ejecución de la fase 2 van en transacciones con ROLLBACK.
  * - No envía WhatsApp, no crea campañas, no activa agentes, no toca citas.
  */
 import fs from "node:fs";
@@ -271,43 +271,7 @@ try {
   }
 
   // -------------------------------------------------------------------------
-  // Transición: el trigger replica escrituras legacy (código antiguo desplegado)
-  // -------------------------------------------------------------------------
-  const legacy = await client.query<{ business_id: string; user_id: string }>(
-    `select bu.business_id, bu.user_id
-     from public.business_users bu
-     join public.business_settings bs on bs.business_id = bu.business_id
-     where bu.role in ('owner', 'admin')
-       and bu.business_id <> $1
-       and bu.business_id <> 'ee05dfbd-839b-4f52-be6f-327080995e56'
-     limit 1`,
-    [businessId],
-  );
-  const legacyRow = legacy.rows[0];
-  const legacyColsExist = await client.query(
-    `select 1 from information_schema.columns
-     where table_schema = 'public' and table_name = 'business_settings'
-       and column_name = 'whatsapp_verify_token'`,
-  );
-  if (legacyRow && legacyColsExist.rowCount) {
-    await asUser(legacyRow.user_id, async () => {
-      await client.query(
-        `update public.business_settings set whatsapp_verify_token = 'rollback-test-token'
-         where business_id = $1`,
-        [legacyRow.business_id],
-      );
-      await client.query("reset role");
-      const synced = await client.query(
-        `select 1 from public.business_secrets
-         where business_id = $1 and whatsapp_verify_token = 'rollback-test-token'`,
-        [legacyRow.business_id],
-      );
-      assert("transición: escritura legacy (admin) se replica en business_secrets", synced.rowCount === 1);
-    });
-  }
-
-  // -------------------------------------------------------------------------
-  // CASO 5: business_settings devuelve lo operativo y, tras la fase 2, sin secretos
+  // CASO 5: business_settings devuelve lo operativo y no contiene secretos
   // -------------------------------------------------------------------------
   if (memberId && businessId) {
     await asUser(memberId, async () => {
@@ -320,49 +284,60 @@ try {
       assert("CASO 5: miembro lee configuración operativa", r.rowCount === 1);
     });
 
-    const phase2 = fs.readFileSync(
-      path.join(
-        "supabase",
-        "pending-migrations",
-        "20260930130000_business_settings_drop_legacy_secrets.sql",
-      ),
-      "utf8",
-    );
-    await client.query("begin");
-    try {
-      await client.query("set local lock_timeout = '3s'");
-      await client.query(phase2);
-      await client.query(
-        `select set_config('request.jwt.claims', $1, true)`,
-        [JSON.stringify({ sub: memberId, role: "authenticated" })],
-      );
-      await client.query("set local role authenticated");
+    await asUser(memberId, async () => {
       const r = await client.query(
         `select * from public.business_settings where business_id = $1`,
         [businessId],
       );
       const cols = r.fields.map((f) => f.name);
-      assert("CASO 5 (fase 2 simulada): miembro sigue leyendo business_settings", r.rowCount === 1);
+      assert("CASO 5: miembro SELECT * business_settings funciona", r.rowCount === 1);
       assert(
-        "CASO 5 (fase 2 simulada): select * de business_settings sin columnas secretas",
+        "CASO 5: SELECT * de business_settings sin columnas secretas",
         SECRET_COLUMNS.every((c) => !cols.includes(c)),
         cols.join(","),
       );
       assert(
-        "CASO 5 (fase 2 simulada): conserva columnas operativas",
+        "CASO 5: conserva columnas operativas",
         ["whatsapp_phone_number_id", "whatsapp_business_account_id", "whatsapp_connection_status", "whatsapp_display_phone", "ai_engine_enabled", "classification_prompt"].every((c) => cols.includes(c)),
       );
-    } finally {
-      await client.query("rollback");
-    }
+    });
+  }
 
-    const stillThere = await client.query(
-      `select count(*)::int as c from information_schema.columns
-       where table_schema = 'public' and table_name = 'business_settings'
-         and column_name = any($1)`,
-      [SECRET_COLUMNS],
-    );
-    assert("fase 2 revertida (simulación sin efectos)", stillThere.rows[0].c === SECRET_COLUMNS.length);
+  const legacyCols = await client.query(
+    `select count(*)::int as c from information_schema.columns
+     where table_schema = 'public' and table_name = 'business_settings'
+       and column_name = any($1)`,
+    [SECRET_COLUMNS],
+  );
+  assert("CASO 5: esquema de business_settings sin columnas legacy de secretos", legacyCols.rows[0].c === 0);
+
+  const syncArtifacts = await client.query(
+    `select
+       (select count(*)::int from pg_trigger where tgname = 'business_settings_sync_legacy_secrets') as trg,
+       (select count(*)::int from pg_proc where proname = 'sync_legacy_business_secrets') as fn`,
+  );
+  assert(
+    "trigger/función de sincronización legacy eliminados",
+    syncArtifacts.rows[0].trg === 0 && syncArtifacts.rows[0].fn === 0,
+  );
+
+  const phase2 = fs.readFileSync(
+    path.join(
+      "supabase",
+      "migrations",
+      "20260930130000_business_settings_drop_legacy_secrets.sql",
+    ),
+    "utf8",
+  );
+  await client.query("begin");
+  try {
+    await client.query("set local lock_timeout = '3s'");
+    const r = await queryError(phase2);
+    assert("migración fase 2 re-ejecutable sin error (idempotente)", r.code === null, `code=${r.code}`);
+    const secretsRows = await client.query(`select count(*)::int as c from public.business_secrets`);
+    assert("re-ejecución de fase 2 no altera business_secrets", secretsRows.rows[0].c > 0);
+  } finally {
+    await client.query("rollback");
   }
 
   // -------------------------------------------------------------------------

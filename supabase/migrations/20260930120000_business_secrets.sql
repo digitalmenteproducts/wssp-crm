@@ -2,7 +2,7 @@
 -- business_secrets solo es accesible con service role (sin grants ni policies
 -- para anon/authenticated). Las columnas legacy de business_settings se
 -- conservan hasta desplegar el código nuevo; se retiran en la fase 2
--- (supabase/pending-migrations/20260930130000_business_settings_drop_legacy_secrets.sql).
+-- (20260930130000_business_settings_drop_legacy_secrets.sql).
 
 create table if not exists public.business_secrets (
   business_id uuid primary key references public.businesses (id) on delete cascade,
