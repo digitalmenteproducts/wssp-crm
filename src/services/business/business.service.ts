@@ -1,5 +1,7 @@
-import { isSecretProvided, maskSecret, slugify } from "@/lib/business";
+import { isSecretProvided, slugify } from "@/lib/business";
 import * as businessRepository from "@/repositories/business.repository";
+import * as businessSecretsRepository from "@/repositories/business-secrets.repository";
+import type { BusinessSecretsStatus } from "@/repositories/business-secrets.repository";
 import { getCurrentUser } from "@/repositories/auth.repository";
 import {
   updateBusinessAiSchema,
@@ -23,21 +25,27 @@ function formatZodIssues(error: { issues: { message: string }[] }): string {
   return error.issues.map((issue) => issue.message).join(" ");
 }
 
-function toPublicSettings(settings: BusinessSettings): BusinessSettingsPublic {
-  const token = settings.whatsapp_access_token;
+function canManageBusinessSecrets(role: string): boolean {
+  return role === "owner" || role === "admin";
+}
+
+function toPublicSettings(
+  settings: BusinessSettings,
+  secrets: BusinessSecretsStatus,
+): BusinessSettingsPublic {
   const phoneId = settings.whatsapp_phone_number_id;
   const status = settings.whatsapp_connection_status ?? "disconnected";
 
   return {
     business_id: settings.business_id,
-    openai_api_key_set: Boolean(settings.openai_api_key),
-    openai_api_key_hint: maskSecret(settings.openai_api_key),
-    whatsapp_access_token_set: Boolean(token),
-    whatsapp_access_token_hint: maskSecret(token),
+    openai_api_key_set: secrets.openai_api_key_set,
+    openai_api_key_hint: secrets.openai_api_key_hint,
+    whatsapp_access_token_set: secrets.whatsapp_access_token_set,
+    whatsapp_access_token_hint: secrets.whatsapp_access_token_hint,
     whatsapp_phone_number_id: phoneId,
     whatsapp_business_account_id: settings.whatsapp_business_account_id,
-    whatsapp_verify_token_set: Boolean(settings.whatsapp_verify_token),
-    whatsapp_verify_token_hint: maskSecret(settings.whatsapp_verify_token),
+    whatsapp_verify_token_set: secrets.whatsapp_verify_token_set,
+    whatsapp_verify_token_hint: secrets.whatsapp_verify_token_hint,
     whatsapp_token_expires_at: settings.whatsapp_token_expires_at ?? null,
     whatsapp_connection_status: status,
     whatsapp_connected_at: settings.whatsapp_connected_at ?? null,
@@ -46,7 +54,8 @@ function toPublicSettings(settings: BusinessSettings): BusinessSettingsPublic {
     classification_prompt: settings.classification_prompt,
     ai_engine_enabled: settings.ai_engine_enabled,
     whatsapp_connected:
-      status === "connected" || Boolean(token && phoneId),
+      status === "connected" ||
+      Boolean(secrets.whatsapp_access_token_set && phoneId),
     updated_at: settings.updated_at,
   };
 }
@@ -136,6 +145,11 @@ export async function getWorkspaceByBusinessId(
     return { ok: false, error: "No se encontró la configuración de la empresa." };
   }
 
+  const secretsStatus = await businessSecretsRepository.getSecretsStatus(businessId);
+  if (secretsStatus.error !== null) {
+    return { ok: false, error: "No se pudo leer el estado de las integraciones." };
+  }
+
   const industry =
     business.industry &&
     [
@@ -156,7 +170,7 @@ export async function getWorkspaceByBusinessId(
     workspace: {
       business: { ...business, industry },
       membership,
-      settings: toPublicSettings(settings),
+      settings: toPublicSettings(settings, secretsStatus.data),
     },
   };
 }
@@ -224,8 +238,13 @@ export async function updateIntegrations(
     return workspaceResult;
   }
 
-  const { business } = workspaceResult.workspace;
-  const patch: Parameters<typeof businessRepository.updateSettings>[1] = {};
+  const { business, membership } = workspaceResult.workspace;
+
+  if (!canManageBusinessSecrets(membership.role)) {
+    return { ok: false, error: "Sin permiso para modificar integraciones." };
+  }
+
+  const patch: businessSecretsRepository.BusinessSecretsPatch = {};
 
   if (isSecretProvided(parsed.data.openai_api_key)) {
     patch.openai_api_key = parsed.data.openai_api_key?.trim();
@@ -246,10 +265,13 @@ export async function updateIntegrations(
     };
   }
 
-  const { error } = await businessRepository.updateSettings(business.id, patch);
+  const { error } = await businessSecretsRepository.updateSecrets(
+    business.id,
+    patch,
+  );
 
   if (error) {
-    return { ok: false, error: error.message };
+    return { ok: false, error: "No se pudieron guardar las integraciones." };
   }
 
   const refreshed = await getWorkspaceByBusinessId(business.id);

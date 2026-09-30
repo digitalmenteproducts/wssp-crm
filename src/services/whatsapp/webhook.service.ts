@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { getOptionalServerEnv } from "@/lib/env";
 import { normalizePhone } from "@/lib/phone";
+import * as businessSecretsRepository from "@/repositories/business-secrets.repository";
 import * as whatsappRepository from "@/repositories/whatsapp.repository";
 import {
   whatsappWebhookPayloadSchema,
@@ -69,7 +70,9 @@ export async function verifyWebhookSubscription(input: {
   }
 
   const { data: bySettings } =
-    await whatsappRepository.findBusinessIdByVerifyToken(input.token);
+    await businessSecretsRepository.findBusinessIdByWhatsAppVerifyToken(
+      input.token,
+    );
 
   const envToken = getOptionalServerEnv().WHATSAPP_VERIFY_TOKEN;
   const tokenMatchesEnv = Boolean(envToken && envToken === input.token);

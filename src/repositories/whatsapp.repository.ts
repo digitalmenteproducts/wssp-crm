@@ -1,16 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Contact, Conversation, Message } from "@/types/whatsapp";
 
-export async function findBusinessIdByVerifyToken(verifyToken: string) {
-  const supabase = createAdminClient();
-
-  return supabase
-    .from("business_settings")
-    .select("business_id")
-    .eq("whatsapp_verify_token", verifyToken)
-    .maybeSingle<{ business_id: string }>();
-}
-
 export async function findBusinessIdByPhoneNumberId(phoneNumberId: string) {
   const supabase = createAdminClient();
 

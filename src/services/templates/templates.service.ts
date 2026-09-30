@@ -8,7 +8,7 @@ import {
   type CreateTemplateInput,
   type UpdateTemplateInput,
 } from "@/schemas/templates";
-import * as businessRepository from "@/repositories/business.repository";
+import * as businessSecretsRepository from "@/repositories/business-secrets.repository";
 import * as templatesRepository from "@/repositories/templates.repository";
 import * as aiRepository from "@/repositories/ai.repository";
 import * as businessService from "@/services/business/business.service";
@@ -30,6 +30,10 @@ import type { Template } from "@/types/templates";
 
 function formatZodIssues(error: { issues: { message: string }[] }): string {
   return error.issues.map((issue) => issue.message).join(" ");
+}
+
+function canUseWhatsAppCredentials(role: string): boolean {
+  return role === "owner" || role === "admin";
 }
 
 export { previewTemplateContent } from "@/lib/templates/preview";
@@ -329,15 +333,19 @@ export async function submitTemplateForReview(
     }
   }
 
-  const { data: settings, error: settingsError } =
-    await businessRepository.findSettingsByBusinessId(businessId);
-
-  if (settingsError) {
-    return { ok: false, error: settingsError.message };
+  if (!canUseWhatsAppCredentials(workspace.workspace.membership.role)) {
+    return { ok: false, error: "Sin permiso para enviar plantillas a Meta." };
   }
 
-  const token = settings?.whatsapp_access_token;
-  const wabaId = settings?.whatsapp_business_account_id;
+  const credentials =
+    await businessSecretsRepository.getWhatsAppCredentials(businessId);
+
+  if (credentials.error !== null) {
+    return { ok: false, error: credentials.error };
+  }
+
+  const token = credentials.data.accessToken;
+  const wabaId = credentials.data.businessAccountId;
 
   if (!token || !wabaId) {
     return {
@@ -483,15 +491,19 @@ export async function syncTemplatesFromMetaForCurrentBusiness(): Promise<
   }
 
   const businessId = workspace.workspace.business.id;
-  const { data: settings, error: settingsError } =
-    await businessRepository.findSettingsByBusinessId(businessId);
-
-  if (settingsError) {
-    return { ok: false, error: settingsError.message };
+  if (!canUseWhatsAppCredentials(workspace.workspace.membership.role)) {
+    return { ok: false, error: "Sin permiso para sincronizar plantillas." };
   }
 
-  const token = settings?.whatsapp_access_token;
-  const wabaId = settings?.whatsapp_business_account_id;
+  const credentials =
+    await businessSecretsRepository.getWhatsAppCredentials(businessId);
+
+  if (credentials.error !== null) {
+    return { ok: false, error: credentials.error };
+  }
+
+  const token = credentials.data.accessToken;
+  const wabaId = credentials.data.businessAccountId;
 
   if (!token || !wabaId) {
     return {

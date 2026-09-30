@@ -28,12 +28,16 @@ await c.query(
    set whatsapp_connection_status = 'disconnected'
    where business_id = $1
      and whatsapp_phone_number_id is null
-     and whatsapp_access_token is null`,
+     and not exists (
+       select 1 from public.business_secrets bsec
+       where bsec.business_id = business_settings.business_id
+         and bsec.whatsapp_access_token is not null
+     )`,
   [id],
 );
 const w = await c.query(
   `select whatsapp_connection_status,
-          whatsapp_access_token is not null as has_token,
+          exists (select 1 from public.business_secrets bsec where bsec.business_id = business_settings.business_id and bsec.whatsapp_access_token is not null) as has_token,
           whatsapp_phone_number_id
    from public.business_settings where business_id = $1`,
   [id],

@@ -11,6 +11,7 @@ import {
 } from "@/lib/meta/oauth-state";
 import { getCurrentUser } from "@/repositories/auth.repository";
 import * as businessRepository from "@/repositories/business.repository";
+import * as businessSecretsRepository from "@/repositories/business-secrets.repository";
 import * as businessService from "@/services/business/business.service";
 
 const GRAPH_VERSION = "v21.0";
@@ -481,8 +482,10 @@ export async function completeMetaOAuth(input: {
   });
 
   if (!resolvedPhone.phoneNumberId) {
-    await businessRepository.updateSettings(gate.businessId, {
+    await businessSecretsRepository.updateSecrets(gate.businessId, {
       whatsapp_access_token: exchanged.accessToken,
+    });
+    await businessRepository.updateSettings(gate.businessId, {
       whatsapp_business_account_id: wabaId,
       whatsapp_connection_status: "error",
     });
@@ -503,8 +506,10 @@ export async function completeMetaOAuth(input: {
   });
 
   if (!subscribed.ok) {
-    await businessRepository.updateSettings(gate.businessId, {
+    await businessSecretsRepository.updateSecrets(gate.businessId, {
       whatsapp_access_token: exchanged.accessToken,
+    });
+    await businessRepository.updateSettings(gate.businessId, {
       whatsapp_business_account_id: wabaId,
       whatsapp_phone_number_id: resolvedPhone.phoneNumberId,
       whatsapp_display_phone: resolvedPhone.displayPhone,
@@ -523,8 +528,19 @@ export async function completeMetaOAuth(input: {
       ? new Date(Date.now() + exchanged.expiresIn * 1000).toISOString()
       : null;
 
+  const { error: secretsError } = await businessSecretsRepository.updateSecrets(
+    gate.businessId,
+    { whatsapp_access_token: exchanged.accessToken },
+  );
+
+  if (secretsError) {
+    await businessRepository.updateSettings(gate.businessId, {
+      whatsapp_connection_status: "error",
+    });
+    return { ok: false, error: "No se pudo guardar la conexión.", status: 500 };
+  }
+
   const { error } = await businessRepository.updateSettings(gate.businessId, {
-    whatsapp_access_token: exchanged.accessToken,
     whatsapp_token_expires_at: expiresAt,
     whatsapp_business_account_id: wabaId,
     whatsapp_phone_number_id: resolvedPhone.phoneNumberId,
@@ -563,10 +579,18 @@ export async function disconnectWhatsAppForCurrentBusiness(): Promise<
     return { ok: false, error: "Sin permiso." };
   }
 
+  const { error: secretsError } = await businessSecretsRepository.updateSecrets(
+    workspace.workspace.business.id,
+    { whatsapp_access_token: null },
+  );
+
+  if (secretsError) {
+    return { ok: false, error: "No se pudo desconectar WhatsApp." };
+  }
+
   const { error } = await businessRepository.updateSettings(
     workspace.workspace.business.id,
     {
-      whatsapp_access_token: null,
       whatsapp_phone_number_id: null,
       whatsapp_business_account_id: null,
       whatsapp_token_expires_at: null,

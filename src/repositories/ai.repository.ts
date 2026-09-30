@@ -150,11 +150,10 @@ export async function getBusinessSettingsForAi(businessId: string) {
   return supabase
     .from("business_settings")
     .select(
-      "openai_api_key, classification_prompt, ai_engine_enabled, classification_inactivity_hours",
+      "classification_prompt, ai_engine_enabled, classification_inactivity_hours",
     )
     .eq("business_id", businessId)
     .maybeSingle<{
-      openai_api_key: string | null;
       classification_prompt: string | null;
       ai_engine_enabled: boolean;
       classification_inactivity_hours: number;

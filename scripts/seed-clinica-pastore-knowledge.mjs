@@ -220,7 +220,7 @@ try {
     [BUSINESS_ID],
   );
   const waBefore = await client.query(
-    `select whatsapp_access_token is not null as has_token,
+    `select exists (select 1 from public.business_secrets bsec where bsec.business_id = business_settings.business_id and bsec.whatsapp_access_token is not null) as has_token,
             whatsapp_phone_number_id, whatsapp_connection_status
      from public.business_settings where business_id = $1`,
     [BUSINESS_ID],
@@ -288,7 +288,7 @@ try {
     [BUSINESS_ID],
   );
   const waAfter = await client.query(
-    `select whatsapp_access_token is not null as has_token,
+    `select exists (select 1 from public.business_secrets bsec where bsec.business_id = business_settings.business_id and bsec.whatsapp_access_token is not null) as has_token,
             whatsapp_phone_number_id, whatsapp_connection_status
      from public.business_settings where business_id = $1`,
     [BUSINESS_ID],

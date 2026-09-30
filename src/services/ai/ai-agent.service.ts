@@ -9,6 +9,7 @@ import {
   type UpsertKnowledgeEntryInput,
 } from "@/schemas/ai-agent";
 import * as aiAgentRepository from "@/repositories/ai-agent.repository";
+import * as businessSecretsRepository from "@/repositories/business-secrets.repository";
 import * as whatsappRepository from "@/repositories/whatsapp.repository";
 import * as businessService from "@/services/business/business.service";
 import { buildAgentSystemPrompt } from "@/lib/ai/agent-prompt";
@@ -879,21 +880,16 @@ export async function processIncomingMessageWithAgent(input: {
     return { ok: true, skipped: false, handoff: true, replied: false };
   }
 
-  const { data: waSettings, error: waSettingsError } = await createAdminClient()
-    .from("business_settings")
-    .select("whatsapp_access_token, whatsapp_phone_number_id")
-    .eq("business_id", input.businessId)
-    .maybeSingle<{
-      whatsapp_access_token: string | null;
-      whatsapp_phone_number_id: string | null;
-    }>();
+  const waCredentials = await businessSecretsRepository.getWhatsAppCredentials(
+    input.businessId,
+  );
 
-  if (waSettingsError) {
-    return { ok: false, error: waSettingsError.message };
+  if (waCredentials.error !== null) {
+    return { ok: false, error: waCredentials.error };
   }
 
-  const token = waSettings?.whatsapp_access_token;
-  const phoneNumberId = waSettings?.whatsapp_phone_number_id;
+  const token = waCredentials.data.accessToken;
+  const phoneNumberId = waCredentials.data.phoneNumberId;
 
   if (!token || !phoneNumberId) {
     return {

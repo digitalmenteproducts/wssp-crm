@@ -3,7 +3,7 @@ import {
   type LaunchCampaignInput,
 } from "@/schemas/campaigns";
 import { getCurrentUser } from "@/repositories/auth.repository";
-import * as businessRepository from "@/repositories/business.repository";
+import * as businessSecretsRepository from "@/repositories/business-secrets.repository";
 import * as campaignsRepository from "@/repositories/campaigns.repository";
 import * as whatsappRepository from "@/repositories/whatsapp.repository";
 import { mapTemplateRow } from "@/repositories/templates.repository";
@@ -118,6 +118,11 @@ export async function launchCampaignForCurrentBusiness(
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
 
+  const role = workspace.workspace.membership.role;
+  if (role !== "owner" && role !== "admin") {
+    return { ok: false, error: "Sin permiso para lanzar campañas." };
+  }
+
   const businessId = workspace.workspace.business.id;
   const { data: authData } = await getCurrentUser();
 
@@ -156,15 +161,15 @@ export async function launchCampaignForCurrentBusiness(
     };
   }
 
-  const { data: settings, error: settingsError } =
-    await businessRepository.findSettingsByBusinessId(businessId);
+  const credentials =
+    await businessSecretsRepository.getWhatsAppCredentials(businessId);
 
-  if (settingsError) {
-    return { ok: false, error: settingsError.message };
+  if (credentials.error !== null) {
+    return { ok: false, error: credentials.error };
   }
 
-  const token = settings?.whatsapp_access_token;
-  const phoneNumberId = settings?.whatsapp_phone_number_id;
+  const token = credentials.data.accessToken;
+  const phoneNumberId = credentials.data.phoneNumberId;
 
   if (!token || !phoneNumberId) {
     return {

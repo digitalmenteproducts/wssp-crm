@@ -38,19 +38,18 @@ export type WhatsAppConnectionStatus =
   | "connected"
   | "error";
 
+/** Columnas operativas de business_settings. Los secretos viven en business_secrets. */
 export type BusinessSettings = {
   business_id: string;
-  openai_api_key: string | null;
-  whatsapp_access_token: string | null;
   whatsapp_phone_number_id: string | null;
   whatsapp_business_account_id: string | null;
-  whatsapp_verify_token: string | null;
   whatsapp_token_expires_at: string | null;
   whatsapp_connection_status: WhatsAppConnectionStatus;
   whatsapp_connected_at: string | null;
   whatsapp_display_phone: string | null;
   whatsapp_coexistence: boolean;
   classification_prompt: string | null;
+  classification_inactivity_hours: number;
   ai_engine_enabled: boolean;
   updated_at: string;
 };

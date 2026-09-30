@@ -27,12 +27,27 @@ export async function findBusinessById(businessId: string) {
     .maybeSingle<Business>();
 }
 
+const SETTINGS_COLUMNS = [
+  "business_id",
+  "whatsapp_phone_number_id",
+  "whatsapp_business_account_id",
+  "whatsapp_token_expires_at",
+  "whatsapp_connection_status",
+  "whatsapp_connected_at",
+  "whatsapp_display_phone",
+  "whatsapp_coexistence",
+  "classification_prompt",
+  "classification_inactivity_hours",
+  "ai_engine_enabled",
+  "updated_at",
+].join(", ");
+
 export async function findSettingsByBusinessId(businessId: string) {
   const supabase = await createClient();
 
   return supabase
     .from("business_settings")
-    .select("*")
+    .select(SETTINGS_COLUMNS)
     .eq("business_id", businessId)
     .maybeSingle<BusinessSettings>();
 }
@@ -72,11 +87,8 @@ export async function updateSettings(
   patch: Partial<
     Pick<
       BusinessSettings,
-      | "openai_api_key"
-      | "whatsapp_access_token"
       | "whatsapp_phone_number_id"
       | "whatsapp_business_account_id"
-      | "whatsapp_verify_token"
       | "whatsapp_token_expires_at"
       | "whatsapp_connection_status"
       | "whatsapp_connected_at"
@@ -93,6 +105,6 @@ export async function updateSettings(
     .from("business_settings")
     .update(patch)
     .eq("business_id", businessId)
-    .select("*")
+    .select(SETTINGS_COLUMNS)
     .single<BusinessSettings>();
 }

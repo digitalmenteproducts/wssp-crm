@@ -223,7 +223,7 @@ try {
     `select id, name, slug, updated_at from public.businesses where slug = 'demo-2386af49'`,
   );
   const demoSettingsBefore = await client.query(
-    `select business_id, whatsapp_phone_number_id, whatsapp_access_token is not null as has_token
+    `select business_id, whatsapp_phone_number_id, exists (select 1 from public.business_secrets bsec where bsec.business_id = business_settings.business_id and bsec.whatsapp_access_token is not null) as has_token
      from public.business_settings
      where business_id = $1`,
     [demoBefore.rows[0]?.id],
@@ -271,25 +271,23 @@ try {
   const settings = await client.query(
     `insert into public.business_settings (
        business_id,
-       openai_api_key,
-       whatsapp_access_token,
        whatsapp_phone_number_id,
        whatsapp_business_account_id,
-       whatsapp_verify_token,
        classification_prompt,
        ai_engine_enabled
-     ) values ($1, null, null, null, null, null, $2, true)
+     ) values ($1, null, null, $2, true)
      returning business_id,
-       whatsapp_access_token,
        whatsapp_phone_number_id,
-       whatsapp_business_account_id,
-       whatsapp_verify_token,
-       openai_api_key`,
+       whatsapp_business_account_id`,
     [businessId, DEFAULT_PROMPT],
   );
   const s = settings.rows[0];
+  const secretsRow = await client.query(
+    `select count(*)::int as c from public.business_secrets where business_id = $1`,
+    [businessId],
+  );
   console.log(
-    `SETTINGS_EMPTY=${!s.whatsapp_access_token && !s.whatsapp_phone_number_id && !s.whatsapp_business_account_id && !s.whatsapp_verify_token && !s.openai_api_key}`,
+    `SETTINGS_EMPTY=${!s.whatsapp_phone_number_id && !s.whatsapp_business_account_id && secretsRow.rows[0].c === 0}`,
   );
 
   let seeded = 0;
@@ -328,7 +326,7 @@ try {
     [demoBefore.rows[0]?.id],
   );
   const demoSettingsAfter = await client.query(
-    `select business_id, whatsapp_phone_number_id, whatsapp_access_token is not null as has_token
+    `select business_id, whatsapp_phone_number_id, exists (select 1 from public.business_secrets bsec where bsec.business_id = business_settings.business_id and bsec.whatsapp_access_token is not null) as has_token
      from public.business_settings where business_id = $1`,
     [demoBefore.rows[0]?.id],
   );

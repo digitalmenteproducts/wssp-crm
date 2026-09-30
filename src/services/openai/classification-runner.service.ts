@@ -1,5 +1,6 @@
 import { getOptionalServerEnv } from "@/lib/env";
 import * as aiRepository from "@/repositories/ai.repository";
+import * as businessSecretsRepository from "@/repositories/business-secrets.repository";
 import type { ConversationForClassification } from "@/repositories/ai.repository";
 import { classifyConversationWithOpenAI } from "@/services/openai/classify.service";
 import type { ClassificationResult } from "@/schemas/ai";
@@ -57,7 +58,14 @@ export async function classifySingleConversation(
     return { ok: false, error: "El motor de IA está desactivado." };
   }
 
-  const apiKey = resolveApiKey(settings.openai_api_key);
+  const openAi = await businessSecretsRepository.getOpenAICredentials(
+    conversation.business_id,
+  );
+  if (openAi.error !== null) {
+    return { ok: false, error: openAi.error };
+  }
+
+  const apiKey = resolveApiKey(openAi.data.apiKey);
   if (!apiKey) {
     return {
       ok: false,
