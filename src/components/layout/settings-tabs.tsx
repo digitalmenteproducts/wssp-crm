@@ -1,10 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { AiSettingsForm } from "@/components/layout/ai-settings-form";
 import { GeneralSettingsForm } from "@/components/layout/general-settings-form";
 import { IntegrationsSettingsForm } from "@/components/layout/integrations-settings-form";
+import { ROUTES } from "@/config/app";
+import { canManageTeam } from "@/lib/team";
 import { cn } from "@/lib/utils";
 import type { BusinessWorkspace } from "@/types/business";
 
@@ -53,9 +56,18 @@ export function SettingsTabs({
             {item.label}
           </button>
         ))}
-        <span className="cursor-not-allowed px-1 pb-3 text-sm text-outline">
-          Equipo
-        </span>
+        {canManageTeam(workspace.membership.role) ? (
+          <Link
+            href={ROUTES.configuracionEquipo}
+            className="-mb-px border-b-2 border-transparent px-1 pb-3 text-sm font-semibold text-secondary transition-colors hover:text-on-surface"
+          >
+            Equipo
+          </Link>
+        ) : (
+          <span className="cursor-not-allowed px-1 pb-3 text-sm text-outline">
+            Equipo
+          </span>
+        )}
         <span className="cursor-not-allowed px-1 pb-3 text-sm text-outline">
           Facturación
         </span>

@@ -24,6 +24,16 @@ export type Business = {
   updated_at: string;
 };
 
+/** Fila de list_business_members: solo los campos de la pantalla Equipo. */
+export type BusinessMember = {
+  user_id: string;
+  name: string | null;
+  email: string | null;
+  role: BusinessRole;
+  joined_at: string;
+  is_current_user: boolean;
+};
+
 export type BusinessUser = {
   id: string;
   business_id: string;

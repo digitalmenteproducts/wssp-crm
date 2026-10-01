@@ -26,6 +26,7 @@ export const ROUTES = {
   agenda: "/agenda",
   servicios: "/servicios",
   configuracion: "/configuracion",
+  configuracionEquipo: "/configuracion/equipo",
 } as const;
 
 export const AUTH_ROUTES = [

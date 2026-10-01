@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type {
   Business,
+  BusinessMember,
   BusinessSettings,
   BusinessUser,
 } from "@/types/business";
@@ -23,6 +24,23 @@ export async function listMembershipsByUserId(
   }
 
   return { data: (data ?? []) as BusinessUser[], error: null };
+}
+
+/** RPC security definer: exige que auth.uid() sea owner/admin de businessId. */
+export async function listBusinessMembers(
+  businessId: string,
+): Promise<{ data: BusinessMember[]; error: string | null; forbidden: boolean }> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.rpc("list_business_members", {
+    p_business_id: businessId,
+  });
+
+  if (error) {
+    return { data: [], error: error.message, forbidden: error.code === "42501" };
+  }
+
+  return { data: (data ?? []) as BusinessMember[], error: null, forbidden: false };
 }
 
 export async function findBusinessById(businessId: string) {
