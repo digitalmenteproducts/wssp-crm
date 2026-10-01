@@ -5,16 +5,24 @@ import type {
   BusinessUser,
 } from "@/types/business";
 
-export async function findMembershipByUserId(userId: string) {
+/** Todas las memberships del usuario de la sesión (RLS: user_id = auth.uid()). */
+export async function listMembershipsByUserId(
+  userId: string,
+): Promise<{ data: BusinessUser[]; error: string | null }> {
   const supabase = await createClient();
 
-  return supabase
+  const { data, error } = await supabase
     .from("business_users")
-    .select("*")
+    .select("id, business_id, user_id, role, created_at")
     .eq("user_id", userId)
     .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle<BusinessUser>();
+    .order("business_id", { ascending: true });
+
+  if (error) {
+    return { data: [], error: error.message };
+  }
+
+  return { data: (data ?? []) as BusinessUser[], error: null };
 }
 
 export async function findBusinessById(businessId: string) {

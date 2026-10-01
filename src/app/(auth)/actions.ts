@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 
 import { ROUTES } from "@/config/app";
+import { clearActiveBusiness } from "@/lib/active-business-cookie";
 import { getCurrentUser } from "@/repositories/auth.repository";
 import * as authService from "@/services/auth/auth.service";
 import * as businessService from "@/services/business/business.service";
@@ -82,5 +83,6 @@ export async function recoverAction(
 
 export async function logoutAction(): Promise<void> {
   await authService.logout();
+  await clearActiveBusiness();
   redirect(ROUTES.login);
 }

@@ -279,28 +279,17 @@ async function assertStateAndMembership(input: {
     return { ok: false, error: "El state no pertenece a la sesión actual." };
   }
 
-  const membership = await businessRepository.findMembershipByUserId(
-    authData.user.id,
-  );
-  if (membership.error || !membership.data) {
+  const workspace = await businessService.resolveCurrentWorkspace();
+  if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: "Sin membresía de empresa." };
   }
 
-  if (membership.data.business_id !== verified.payload.businessId) {
-    return { ok: false, error: "La empresa del state no coincide." };
-  }
-
-  if (!canManageIntegrations(membership.data.role)) {
-    return { ok: false, error: "Sin permiso para conectar WhatsApp." };
-  }
-
-  const workspace = await businessService.getCurrentWorkspace();
-  if (
-    !workspace.ok ||
-    !workspace.workspace ||
-    workspace.workspace.business.id !== verified.payload.businessId
-  ) {
+  if (workspace.workspace.business.id !== verified.payload.businessId) {
     return { ok: false, error: "Empresa activa no coincide con el state." };
+  }
+
+  if (!canManageIntegrations(workspace.workspace.membership.role)) {
+    return { ok: false, error: "Sin permiso para conectar WhatsApp." };
   }
 
   return {

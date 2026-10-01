@@ -1,3 +1,8 @@
+import { selectActiveMembership } from "@/lib/active-business";
+import {
+  persistActiveBusiness,
+  readActiveBusinessPreference,
+} from "@/lib/active-business-cookie";
 import { isSecretProvided, slugify } from "@/lib/business";
 import * as businessRepository from "@/repositories/business.repository";
 import * as businessSecretsRepository from "@/repositories/business-secrets.repository";
@@ -14,6 +19,7 @@ import {
 import type {
   BusinessSettings,
   BusinessSettingsPublic,
+  BusinessUser,
   BusinessWorkspace,
 } from "@/types/business";
 
@@ -64,81 +70,116 @@ export async function ensureWorkspaceForUser(input?: {
   preferredName?: string;
   supportEmail?: string | null;
 }): Promise<BusinessActionResult> {
-  const { data: authData, error: authError } = await getCurrentUser();
+  const resolved = await resolveWorkspace();
+  if (resolved.kind !== "no_membership") {
+    return resolved.result;
+  }
 
+  // Solo se crea negocio si el usuario no tiene ninguna membership.
+  // Con invitaciones, aquí se aceptará la invitación pendiente en su lugar.
+  const { data: authData, error: authError } = await getCurrentUser();
   if (authError || !authData.user) {
     return { ok: false, error: "Debes iniciar sesión." };
   }
 
   const user = authData.user;
-  const { data: membership, error: membershipError } =
-    await businessRepository.findMembershipByUserId(user.id);
+  const preferredName =
+    input?.preferredName?.trim() ||
+    (typeof user.user_metadata?.name === "string"
+      ? user.user_metadata.name
+      : null) ||
+    user.email?.split("@")[0] ||
+    "Mi negocio";
 
-  if (membershipError) {
+  const baseSlug = slugify(preferredName) || "negocio";
+  const slug = `${baseSlug}-${user.id.slice(0, 8)}`;
+
+  const { data: createdId, error: createError } =
+    await businessRepository.createBusinessForCurrentUser({
+      name: preferredName,
+      slug,
+      supportEmail: input?.supportEmail ?? user.email ?? null,
+    });
+
+  if (createError || !createdId) {
     return {
       ok: false,
-      error: `No se pudo consultar tu empresa: ${membershipError.message}`,
+      error:
+        createError?.message ??
+        "No se pudo crear la empresa. Revisa la migración SQL en Supabase.",
     };
   }
 
-  let businessId = membership?.business_id;
-
-  if (!businessId) {
-    const preferredName =
-      input?.preferredName?.trim() ||
-      (typeof user.user_metadata?.name === "string"
-        ? user.user_metadata.name
-        : null) ||
-      user.email?.split("@")[0] ||
-      "Mi negocio";
-
-    const baseSlug = slugify(preferredName) || "negocio";
-    const slug = `${baseSlug}-${user.id.slice(0, 8)}`;
-
-    const { data: createdId, error: createError } =
-      await businessRepository.createBusinessForCurrentUser({
-        name: preferredName,
-        slug,
-        supportEmail: input?.supportEmail ?? user.email ?? null,
-      });
-
-    if (createError || !createdId) {
-      return {
-        ok: false,
-        error:
-          createError?.message ??
-          "No se pudo crear la empresa. Revisa la migración SQL en Supabase.",
-      };
-    }
-
-    businessId = createdId as string;
-  }
-
-  return getWorkspaceByBusinessId(businessId);
+  const created = await resolveWorkspace();
+  return created.kind === "no_membership"
+    ? { ok: false, error: "No se pudo crear la empresa." }
+    : created.result;
 }
 
-export async function getWorkspaceByBusinessId(
-  businessId: string,
-): Promise<BusinessActionResult> {
+type WorkspaceResolution =
+  | { kind: "resolved"; result: BusinessActionResult }
+  | { kind: "no_membership" }
+  | { kind: "error"; result: BusinessActionResult };
+
+/**
+ * Único punto que decide el negocio de la sesión.
+ * La preferencia (cookie) solo se acepta si coincide con una membership del
+ * usuario autenticado; si no, se descarta y se usa una membership válida.
+ */
+async function resolveWorkspace(): Promise<WorkspaceResolution> {
   const { data: authData, error: authError } = await getCurrentUser();
 
   if (authError || !authData.user) {
-    return { ok: false, error: "Debes iniciar sesión." };
+    return { kind: "error", result: { ok: false, error: "Debes iniciar sesión." } };
   }
 
-  const [{ data: business, error: businessError }, { data: membership }, { data: settings, error: settingsError }] =
+  const [memberships, preference] = await Promise.all([
+    businessRepository.listMembershipsByUserId(authData.user.id),
+    readActiveBusinessPreference(),
+  ]);
+
+  if (memberships.error) {
+    return {
+      kind: "error",
+      result: {
+        ok: false,
+        error: `No se pudo consultar tu empresa: ${memberships.error}`,
+      },
+    };
+  }
+
+  const selection = selectActiveMembership(memberships.data, preference);
+  if (!selection) {
+    return { kind: "no_membership" };
+  }
+
+  if (selection.membership.business_id !== preference) {
+    await persistActiveBusiness(selection.membership.business_id);
+  }
+
+  return { kind: "resolved", result: await loadWorkspace(selection.membership) };
+}
+
+/** Workspace actual sin crear negocio si el usuario no tiene memberships. */
+export async function resolveCurrentWorkspace(): Promise<BusinessActionResult> {
+  const resolved = await resolveWorkspace();
+  return resolved.kind === "no_membership"
+    ? { ok: false, error: "No perteneces a ninguna empresa." }
+    : resolved.result;
+}
+
+async function loadWorkspace(
+  membership: BusinessUser,
+): Promise<BusinessActionResult> {
+  const businessId = membership.business_id;
+  const [{ data: business, error: businessError }, { data: settings, error: settingsError }] =
     await Promise.all([
       businessRepository.findBusinessById(businessId),
-      businessRepository.findMembershipByUserId(authData.user.id),
       businessRepository.findSettingsByBusinessId(businessId),
     ]);
 
   if (businessError || !business) {
     return { ok: false, error: "No se encontró la empresa." };
-  }
-
-  if (!membership || membership.business_id !== businessId) {
-    return { ok: false, error: "No tienes acceso a esta empresa." };
   }
 
   if (settingsError || !settings) {
@@ -175,6 +216,10 @@ export async function getWorkspaceByBusinessId(
   };
 }
 
+/**
+ * Punto de entrada del resto de la app. Delega en la resolución centralizada;
+ * solo crea negocio si el usuario no tiene ninguna membership.
+ */
 export async function getCurrentWorkspace(): Promise<BusinessActionResult> {
   return ensureWorkspaceForUser();
 }
@@ -210,7 +255,7 @@ export async function updateGeneral(
     return { ok: false, error: error.message };
   }
 
-  const refreshed = await getWorkspaceByBusinessId(business.id);
+  const refreshed = await resolveCurrentWorkspace();
 
   if (!refreshed.ok) {
     return refreshed;
@@ -274,7 +319,7 @@ export async function updateIntegrations(
     return { ok: false, error: "No se pudieron guardar las integraciones." };
   }
 
-  const refreshed = await getWorkspaceByBusinessId(business.id);
+  const refreshed = await resolveCurrentWorkspace();
 
   if (!refreshed.ok) {
     return refreshed;
@@ -313,7 +358,7 @@ export async function updateAi(
     return { ok: false, error: error.message };
   }
 
-  const refreshed = await getWorkspaceByBusinessId(business.id);
+  const refreshed = await resolveCurrentWorkspace();
 
   if (!refreshed.ok) {
     return refreshed;
