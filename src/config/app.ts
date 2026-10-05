@@ -18,6 +18,7 @@ export const ROUTES = {
   privacyPolicy: "/privacy-policy",
   panel: "/panel",
   contactos: "/contactos",
+  conversaciones: "/conversaciones",
   segmentos: "/segmentos",
   plantillas: "/plantillas",
   campanas: "/campanas",
@@ -38,6 +39,7 @@ export const AUTH_ROUTES = [
 export const PROTECTED_PREFIXES = [
   ROUTES.panel,
   ROUTES.contactos,
+  ROUTES.conversaciones,
   ROUTES.segmentos,
   ROUTES.plantillas,
   ROUTES.campanas,

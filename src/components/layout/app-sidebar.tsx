@@ -10,6 +10,7 @@ import {
   LayoutDashboard,
   Layers,
   Megaphone,
+  MessagesSquare,
   Plus,
   Settings,
   Users,
@@ -48,6 +49,11 @@ export function AppSidebar({ industry = "other" }: AppSidebarProps) {
       href: ROUTES.contactos,
       label: contactsNavLabel(industry),
       icon: Users,
+    },
+    {
+      href: ROUTES.conversaciones,
+      label: "Conversaciones",
+      icon: MessagesSquare,
     },
     ...(hasClinicAgenda(industry)
       ? [
