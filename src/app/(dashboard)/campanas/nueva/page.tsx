@@ -4,6 +4,7 @@ import Link from "next/link";
 import { LaunchCampaignForm } from "@/components/campaigns/launch-campaign-form";
 import { PageHeader } from "@/components/layout/page-header";
 import { ROUTES } from "@/config/app";
+import * as accessService from "@/services/business/access.service";
 import * as segmentsService from "@/services/segmentation/segments.service";
 import { evaluateSegmentMembership } from "@/services/segmentation/segments.service";
 import * as templatesService from "@/services/templates/templates.service";
@@ -21,6 +22,7 @@ type NuevaCampanaPageProps = {
 export default async function NuevaCampanaPage({
   searchParams,
 }: NuevaCampanaPageProps) {
+  await accessService.requireModulePage("campaigns");
   const params = searchParams ? await searchParams : {};
   const defaultSegmentId = params.segmento;
 

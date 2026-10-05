@@ -8,7 +8,7 @@ import { hasClinicAgenda } from "@/lib/industry";
 import * as contactsRepository from "@/repositories/contacts.repository";
 import * as appointmentService from "@/services/clinic/appointment.service";
 import * as clinicServicesService from "@/services/clinic/services.service";
-import * as businessService from "@/services/business/business.service";
+import * as accessService from "@/services/business/access.service";
 
 export const dynamic = "force-dynamic";
 
@@ -17,11 +17,11 @@ export const metadata: Metadata = {
 };
 
 export default async function AgendaPage() {
-  const workspace = await businessService.getCurrentWorkspace();
-  if (!workspace.ok || !workspace.workspace) {
+  const workspace = await accessService.requireModulePage("agenda");
+  if (!workspace.ok) {
     return (
       <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-        {workspace.ok ? "Sin empresa." : workspace.error}
+        {workspace.error}
       </div>
     );
   }

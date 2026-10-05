@@ -1,4 +1,3 @@
-import { hasClinicAgenda } from "@/lib/industry";
 import {
   clinicErrorMessage,
   mapTechnicalError,
@@ -6,7 +5,7 @@ import {
 } from "@/lib/clinic/errors";
 import { buildServiceBookingContext } from "@/lib/clinic/resolve-service-booking";
 import * as clinicRepository from "@/repositories/clinic.repository";
-import * as businessService from "@/services/business/business.service";
+import { requireClinicWorkspace } from "@/services/clinic/clinic-access";
 import {
   createClinicAppointmentSchema,
   createClinicBlockSchema,
@@ -72,50 +71,14 @@ function fail(
   };
 }
 
-async function requireClinicAdminWorkspace() {
-  const workspace = await businessService.getCurrentWorkspace();
-  if (!workspace.ok || !workspace.workspace) {
-    return {
-      ok: false as const,
-      error: workspace.ok ? "Sin empresa." : workspace.error,
-      code: "GENERIC" as const,
-    };
-  }
-  if (!hasClinicAgenda(workspace.workspace.business.industry)) {
-    return {
-      ok: false as const,
-      error: "La agenda clínica no está disponible para este negocio.",
-      code: "GENERIC" as const,
-    };
-  }
-  const role = workspace.workspace.membership.role;
-  if (role !== "owner" && role !== "admin") {
-    return {
-      ok: false as const,
-      error: "Sin permiso de administración.",
-      code: "GENERIC" as const,
-    };
-  }
-  return { ok: true as const, workspace: workspace.workspace };
+/** Escrituras de agenda (citas, recursos, disponibilidad, bloqueos): owner/admin. */
+function requireClinicAdminWorkspace() {
+  return requireClinicWorkspace("agenda", { manage: true });
 }
 
-async function requireClinicMemberWorkspace() {
-  const workspace = await businessService.getCurrentWorkspace();
-  if (!workspace.ok || !workspace.workspace) {
-    return {
-      ok: false as const,
-      error: workspace.ok ? "Sin empresa." : workspace.error,
-      code: "GENERIC" as const,
-    };
-  }
-  if (!hasClinicAgenda(workspace.workspace.business.industry)) {
-    return {
-      ok: false as const,
-      error: "La agenda clínica no está disponible para este negocio.",
-      code: "GENERIC" as const,
-    };
-  }
-  return { ok: true as const, workspace: workspace.workspace };
+/** Lectura de agenda: roles con el módulo agenda (professional no, hasta vincularlo a un recurso). */
+function requireClinicMemberWorkspace() {
+  return requireClinicWorkspace("agenda");
 }
 
 function classifyBusyConflict(input: {

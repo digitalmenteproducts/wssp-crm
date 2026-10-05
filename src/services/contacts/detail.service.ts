@@ -5,7 +5,7 @@ import {
 } from "@/schemas/contacts";
 import * as contactsRepository from "@/repositories/contacts.repository";
 import * as aiRepository from "@/repositories/ai.repository";
-import * as businessService from "@/services/business/business.service";
+import * as accessService from "@/services/business/access.service";
 import {
   matchSegmentRules,
   getLastMessageAt,
@@ -95,7 +95,7 @@ export async function getContactDetailForCurrentBusiness(
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
 
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("contacts");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
@@ -216,7 +216,7 @@ export async function updateContactTagsForCurrentBusiness(
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
 
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("contacts");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }

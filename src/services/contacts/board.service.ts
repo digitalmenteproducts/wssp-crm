@@ -9,7 +9,7 @@ import {
 import { normalizePhone } from "@/lib/phone";
 import * as contactsRepository from "@/repositories/contacts.repository";
 import { reanalyzeConversation } from "@/services/openai/classification-runner.service";
-import * as businessService from "@/services/business/business.service";
+import * as accessService from "@/services/business/access.service";
 import type { ContactBoardStatus } from "@/types";
 import {
   CONTACT_BOARD_LABELS,
@@ -43,7 +43,7 @@ export async function getBoardForCurrentBusiness(): Promise<
   | { ok: true; board: ContactBoard }
   | { ok: false; error: string }
 > {
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("contacts");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
@@ -140,7 +140,7 @@ export async function moveContactForCurrentBusiness(
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
 
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("contacts");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
@@ -169,7 +169,7 @@ export async function reanalyzeContactForCurrentBusiness(
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
 
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("contacts");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
@@ -209,7 +209,7 @@ export async function createManualContactForCurrentBusiness(
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
 
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("contacts");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }

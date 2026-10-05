@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 
 import { AiAgentWorkspace } from "@/components/ai-agent/ai-agent-workspace";
 import { PageHeader } from "@/components/layout/page-header";
+import { canManageBusiness } from "@/lib/permissions";
 import * as aiAgentService from "@/services/ai/ai-agent.service";
-import * as businessService from "@/services/business/business.service";
+import * as accessService from "@/services/business/access.service";
 
 export const dynamic = "force-dynamic";
 
@@ -12,15 +13,10 @@ export const metadata: Metadata = {
 };
 
 export default async function AgenteIaPage() {
-  const [pageData, workspace] = await Promise.all([
-    aiAgentService.getAiAgentPageData(),
-    businessService.getCurrentWorkspace(),
-  ]);
+  const workspace = await accessService.requireModulePage("ai_agent");
+  const pageData = await aiAgentService.getAiAgentPageData();
 
-  const role = workspace.ok
-    ? workspace.workspace?.membership.role
-    : undefined;
-  const canEdit = role === "owner" || role === "admin";
+  const canEdit = workspace.ok && canManageBusiness(workspace.workspace.membership.role);
 
   return (
     <>

@@ -63,8 +63,12 @@ function assert(name: string, condition: boolean, detail?: string) {
 assert("labels: owner → Propietario", businessRoleLabel("owner") === "Propietario");
 assert("labels: admin → Administrador", businessRoleLabel("admin") === "Administrador");
 assert("labels: member → Miembro", businessRoleLabel("member") === "Miembro");
-assert("labels: solo 3 roles (sin roles nuevos)", Object.keys(BUSINESS_ROLE_LABELS).join(",") === "owner,admin,member");
-assert("canManageTeam: owner/admin sí, member no", canManageTeam("owner") && canManageTeam("admin") && !canManageTeam("member"));
+assert("labels: professional → Profesional", businessRoleLabel("professional") === "Profesional");
+assert("labels: solo los 4 roles del MVP", Object.keys(BUSINESS_ROLE_LABELS).join(",") === "owner,admin,professional,member");
+assert(
+  "canManageTeam: owner/admin sí; professional y member no",
+  canManageTeam("owner") && canManageTeam("admin") && !canManageTeam("professional") && !canManageTeam("member"),
+);
 assert(
   "fecha: 15 sep 2026 en zona del negocio",
   formatJoinedDate("2026-09-15T15:00:00Z", "America/Argentina/Tucuman") === "15 sep 2026",

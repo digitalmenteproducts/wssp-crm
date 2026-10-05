@@ -17,6 +17,7 @@ const ROLE_PRIORITY: Record<BusinessRole, number> = {
   owner: 0,
   admin: 1,
   member: 2,
+  professional: 3,
 };
 
 export type ActiveMembershipSource = "preferred" | "single" | "fallback";
@@ -31,7 +32,7 @@ export type ActiveMembershipSelection = {
 /**
  * Elige la membership activa entre las del usuario autenticado.
  * `memberships` debe venir filtrado por el user_id de la sesión (nunca del cliente).
- * Fallback determinista: owner > admin > member, luego más antigua, luego business_id.
+ * Fallback determinista: owner > admin > member > professional, luego más antigua, luego business_id.
  */
 export function selectActiveMembership(
   memberships: readonly BusinessUser[],

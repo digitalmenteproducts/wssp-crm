@@ -11,7 +11,12 @@ import {
 import * as aiAgentRepository from "@/repositories/ai-agent.repository";
 import * as businessSecretsRepository from "@/repositories/business-secrets.repository";
 import * as whatsappRepository from "@/repositories/whatsapp.repository";
-import * as businessService from "@/services/business/business.service";
+import {
+  canAccessModule,
+  canManageBusiness,
+  type AppModule,
+} from "@/lib/permissions";
+import * as accessService from "@/services/business/access.service";
 import { buildAgentSystemPrompt } from "@/lib/ai/agent-prompt";
 import {
   formatKnowledgeForPrompt,
@@ -92,7 +97,9 @@ function defaultSettings(businessId: string, businessName: string): AiAgentSetti
   };
 }
 
-async function requireAdminWorkspace(): Promise<
+async function requireAdminWorkspace(
+  module: Extract<AppModule, "ai_agent" | "knowledge"> = "ai_agent",
+): Promise<
   | {
       ok: true;
       businessId: string;
@@ -101,16 +108,13 @@ async function requireAdminWorkspace(): Promise<
     }
   | { ok: false; error: string }
 > {
-  const workspace = await businessService.getCurrentWorkspace();
-  if (!workspace.ok || !workspace.workspace) {
-    return {
-      ok: false,
-      error: workspace.ok ? "Sin empresa activa." : workspace.error,
-    };
+  const workspace = await accessService.getWorkspaceForModule(module);
+  if (!workspace.ok) {
+    return { ok: false, error: workspace.error };
   }
 
   const role = workspace.workspace.membership.role;
-  if (role !== "owner" && role !== "admin") {
+  if (!canManageBusiness(role)) {
     return { ok: false, error: "Solo owner/admin pueden gestionar el Agente IA." };
   }
 
@@ -131,41 +135,27 @@ export async function getAiAgentPageData(): Promise<
     }
   | { ok: false; error: string }
 > {
-  const gate = await requireAdminWorkspace();
-  if (!gate.ok) {
-    // Members can still view settings read-only via member RLS — try member path
-    const workspace = await businessService.getCurrentWorkspace();
-    if (!workspace.ok || !workspace.workspace) {
-      return { ok: false, error: gate.error };
-    }
-    const businessId = workspace.workspace.business.id;
-    const { data, error } = await aiAgentRepository.getAiAgentSettings(businessId);
-    if (error) return { ok: false, error: error.message };
-    const knowledge = await aiAgentRepository.listKnowledgeEntries(businessId);
-    if (knowledge.error) return { ok: false, error: knowledge.error.message };
-
-    return {
-      ok: true,
-      settings:
-        data ??
-        defaultSettings(businessId, workspace.workspace.business.name),
-      knowledge: knowledge.data ?? [],
-      openAiConfigured: Boolean(getCentralOpenAiApiKey()),
-    };
+  // Lectura: cualquier rol con el módulo (member sigue viéndolo en solo lectura).
+  const workspace = await accessService.getWorkspaceForModule("ai_agent");
+  if (!workspace.ok) {
+    return { ok: false, error: workspace.error };
   }
+  const { business, membership } = workspace.workspace;
 
-  const { data, error } = await aiAgentRepository.getAiAgentSettings(
-    gate.businessId,
-  );
+  const { data, error } = await aiAgentRepository.getAiAgentSettings(business.id);
   if (error) return { ok: false, error: error.message };
 
-  const knowledge = await aiAgentRepository.listKnowledgeEntries(gate.businessId);
-  if (knowledge.error) return { ok: false, error: knowledge.error.message };
+  let knowledge: AiKnowledgeEntry[] = [];
+  if (canAccessModule(membership.role, "knowledge")) {
+    const entries = await aiAgentRepository.listKnowledgeEntries(business.id);
+    if (entries.error) return { ok: false, error: entries.error.message };
+    knowledge = entries.data ?? [];
+  }
 
   return {
     ok: true,
-    settings: data ?? defaultSettings(gate.businessId, gate.businessName),
-    knowledge: knowledge.data ?? [],
+    settings: data ?? defaultSettings(business.id, business.name),
+    knowledge,
     openAiConfigured: Boolean(getCentralOpenAiApiKey()),
   };
 }
@@ -231,7 +221,7 @@ export async function upsertKnowledgeForCurrentBusiness(
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
 
-  const gate = await requireAdminWorkspace();
+  const gate = await requireAdminWorkspace("knowledge");
   if (!gate.ok) return gate;
 
   const { data, error } = await aiAgentRepository.upsertKnowledgeEntry(
@@ -267,7 +257,7 @@ export async function deleteKnowledgeForCurrentBusiness(
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
 
-  const gate = await requireAdminWorkspace();
+  const gate = await requireAdminWorkspace("knowledge");
   if (!gate.ok) return gate;
 
   const { error } = await aiAgentRepository.deleteKnowledgeEntry(

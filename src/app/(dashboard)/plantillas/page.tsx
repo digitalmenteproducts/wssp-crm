@@ -4,6 +4,7 @@ import { CreateTemplateForm } from "@/components/templates/create-template-form"
 import { SyncTemplatesButton } from "@/components/templates/sync-templates-button";
 import { TemplatesLibrary } from "@/components/templates/templates-library";
 import { PageHeader } from "@/components/layout/page-header";
+import * as accessService from "@/services/business/access.service";
 import * as segmentsService from "@/services/segmentation/segments.service";
 import * as templatesService from "@/services/templates/templates.service";
 
@@ -14,6 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default async function PlantillasPage() {
+  await accessService.requireModulePage("campaigns");
   const [templatesResult, segmentsResult] = await Promise.all([
     templatesService.listTemplatesForCurrentBusiness(),
     segmentsService.listSegmentsForCurrentBusiness(),

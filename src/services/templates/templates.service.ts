@@ -11,7 +11,8 @@ import {
 import * as businessSecretsRepository from "@/repositories/business-secrets.repository";
 import * as templatesRepository from "@/repositories/templates.repository";
 import * as aiRepository from "@/repositories/ai.repository";
-import * as businessService from "@/services/business/business.service";
+import { canManageBusiness } from "@/lib/permissions";
+import * as accessService from "@/services/business/access.service";
 import {
   createMetaMessageTemplate,
   extractButtons,
@@ -33,7 +34,7 @@ function formatZodIssues(error: { issues: { message: string }[] }): string {
 }
 
 function canUseWhatsAppCredentials(role: string): boolean {
-  return role === "owner" || role === "admin";
+  return canManageBusiness(role);
 }
 
 export { previewTemplateContent } from "@/lib/templates/preview";
@@ -50,7 +51,7 @@ export async function listTemplatesForCurrentBusiness(): Promise<
   | { ok: true; templates: Template[] }
   | { ok: false; error: string }
 > {
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
@@ -74,7 +75,7 @@ export async function createTemplateForCurrentBusiness(
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
 
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
@@ -118,7 +119,7 @@ export async function updateTemplateForCurrentBusiness(
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
 
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
@@ -208,7 +209,7 @@ export async function deleteTemplateForCurrentBusiness(
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
 
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
@@ -251,7 +252,7 @@ export async function assignTemplateSegmentForCurrentBusiness(input: {
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
 
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
@@ -293,7 +294,7 @@ export async function submitTemplateForReview(
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
 
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
@@ -434,7 +435,7 @@ export async function duplicateTemplateForCurrentBusiness(
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
 
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
@@ -485,7 +486,7 @@ export async function syncTemplatesFromMetaForCurrentBusiness(): Promise<
   | { ok: true; created: number; updated: number; total: number }
   | { ok: false; error: string }
 > {
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }

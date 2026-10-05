@@ -4,6 +4,7 @@ import {
   isAiMessage,
   isSimulationMessage,
 } from "@/lib/conversations";
+import { ACCESS_DENIED_MESSAGE, canAccessModule } from "@/lib/permissions";
 import * as conversationsRepository from "@/repositories/conversations.repository";
 import { conversationIdSchema } from "@/schemas/conversations";
 import * as businessService from "@/services/business/business.service";
@@ -20,7 +21,7 @@ export type ConversationsPageResult =
       selected: SelectedConversation | null;
       selectedNotFound: boolean;
     }
-  | { ok: false; error: string };
+  | { ok: false; forbidden?: boolean; error: string };
 
 function firstContact<T>(value: T | T[] | null): T | null {
   if (Array.isArray(value)) return value[0] ?? null;
@@ -40,7 +41,10 @@ export async function getConversationsPageData(
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
 
-  const { business } = workspace.workspace;
+  const { business, membership } = workspace.workspace;
+  if (!canAccessModule(membership.role, "conversations")) {
+    return { ok: false, forbidden: true, error: ACCESS_DENIED_MESSAGE };
+  }
 
   const { data: rows, error } =
     await conversationsRepository.listRecentConversations(

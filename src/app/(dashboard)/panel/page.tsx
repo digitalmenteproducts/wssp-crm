@@ -10,6 +10,10 @@ import {
 
 import { PageHeader } from "@/components/layout/page-header";
 import { StatCard } from "@/components/layout/stat-card";
+import { ACCESS_DENIED_MESSAGE, ACCESS_DENIED_PARAM } from "@/lib/permissions";
+import * as accessService from "@/services/business/access.service";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Panel de control",
@@ -59,13 +63,30 @@ const DASHBOARD_STATS = [
   },
 ] as const;
 
-export default function PanelPage() {
+type PanelPageProps = {
+  searchParams: Promise<{ [ACCESS_DENIED_PARAM]?: string }>;
+};
+
+export default async function PanelPage({ searchParams }: PanelPageProps) {
+  await accessService.requireModulePage("dashboard");
+  const params = await searchParams;
+  const denied = params[ACCESS_DENIED_PARAM] === "denegado";
+
   return (
     <>
       <PageHeader
         title="Resumen del Panel de Control"
         description="Esto es lo que sucede con tus contactos hoy."
       />
+
+      {denied ? (
+        <div
+          role="alert"
+          className="mb-6 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+        >
+          {ACCESS_DENIED_MESSAGE}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
         {DASHBOARD_STATS.map((stat) => (

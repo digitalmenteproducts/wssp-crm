@@ -1,8 +1,10 @@
+import { canAccessModule } from "@/lib/permissions";
 import type { BusinessRole } from "@/types/business";
 
 export const BUSINESS_ROLE_LABELS: Record<BusinessRole, string> = {
   owner: "Propietario",
   admin: "Administrador",
+  professional: "Profesional",
   member: "Miembro",
 };
 
@@ -13,7 +15,7 @@ export function businessRoleLabel(role: string): string {
 }
 
 export function canManageTeam(role: string): boolean {
-  return role === "owner" || role === "admin";
+  return canAccessModule(role, "team");
 }
 
 const MONTHS_ES = [

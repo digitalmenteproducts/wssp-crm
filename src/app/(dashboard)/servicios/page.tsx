@@ -5,7 +5,8 @@ import { ClinicServicesWorkspace } from "@/components/clinic/clinic-services-wor
 import { PageHeader } from "@/components/layout/page-header";
 import { ROUTES } from "@/config/app";
 import { hasClinicAgenda } from "@/lib/industry";
-import * as businessService from "@/services/business/business.service";
+import { canManageBusiness } from "@/lib/permissions";
+import * as accessService from "@/services/business/access.service";
 import * as clinicServicesService from "@/services/clinic/services.service";
 
 export const dynamic = "force-dynamic";
@@ -15,11 +16,11 @@ export const metadata: Metadata = {
 };
 
 export default async function ServiciosPage() {
-  const workspace = await businessService.getCurrentWorkspace();
-  if (!workspace.ok || !workspace.workspace) {
+  const workspace = await accessService.requireModulePage("services");
+  if (!workspace.ok) {
     return (
       <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-        {workspace.ok ? "Sin empresa." : workspace.error}
+        {workspace.error}
       </div>
     );
   }
@@ -29,8 +30,7 @@ export default async function ServiciosPage() {
   }
 
   const pageData = await clinicServicesService.listServicesPageData();
-  const role = workspace.workspace.membership.role;
-  const canEdit = role === "owner" || role === "admin";
+  const canEdit = canManageBusiness(workspace.workspace.membership.role);
 
   return (
     <>

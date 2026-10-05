@@ -4,6 +4,7 @@ import { CreateManualSegmentForm } from "@/components/segments/create-manual-seg
 import { SegmentsLibrary } from "@/components/segments/segments-library";
 import { SyncAiSegmentsButton } from "@/components/segments/sync-ai-segments-button";
 import { PageHeader } from "@/components/layout/page-header";
+import * as accessService from "@/services/business/access.service";
 import * as segmentsService from "@/services/segmentation/segments.service";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +14,7 @@ export const metadata: Metadata = {
 };
 
 export default async function SegmentosPage() {
+  await accessService.requireModulePage("campaigns");
   const list = await segmentsService.listSegmentCardsForCurrentBusiness();
 
   return (

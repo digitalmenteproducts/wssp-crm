@@ -22,51 +22,52 @@ import type { LucideIcon } from "lucide-react";
 import { BrandLogo } from "@/components/layout/brand-logo";
 import { APP_NAME, ROUTES } from "@/config/app";
 import { contactsNavLabel, hasClinicAgenda } from "@/lib/industry";
+import { canAccessModule, type AppModule } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
-import type { BusinessIndustry } from "@/types/business";
+import type { BusinessIndustry, BusinessRole } from "@/types/business";
 
 type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  module: AppModule;
+  clinicOnly?: boolean;
 };
 
-const FOOTER_NAV: NavItem[] = [
+const FOOTER_NAV = [
   { href: "#", label: "Ayuda", icon: HelpCircle },
   { href: "#", label: "Organización", icon: Building2 },
 ];
 
 type AppSidebarProps = {
   industry?: BusinessIndustry;
+  /** Solo oculta navegación; el acceso real se valida en servidor. */
+  role: BusinessRole | null;
 };
 
-export function AppSidebar({ industry = "other" }: AppSidebarProps) {
+export function AppSidebar({ industry = "other", role }: AppSidebarProps) {
   const pathname = usePathname();
 
-  const primaryNav: NavItem[] = [
-    { href: ROUTES.panel, label: "Panel de Control", icon: LayoutDashboard },
-    {
-      href: ROUTES.contactos,
-      label: contactsNavLabel(industry),
-      icon: Users,
-    },
-    {
-      href: ROUTES.conversaciones,
-      label: "Conversaciones",
-      icon: MessagesSquare,
-    },
-    ...(hasClinicAgenda(industry)
-      ? [
-          { href: ROUTES.agenda, label: "Agenda", icon: CalendarDays },
-          { href: ROUTES.servicios, label: "Servicios", icon: ClipboardList },
-        ]
-      : []),
-    { href: ROUTES.segmentos, label: "Segmentos", icon: Layers },
-    { href: ROUTES.plantillas, label: "Plantillas", icon: FileText },
-    { href: ROUTES.campanas, label: "Campañas", icon: Megaphone },
-    { href: ROUTES.agenteIa, label: "Agente IA", icon: Bot },
-    { href: ROUTES.configuracion, label: "Configuración", icon: Settings },
+  const allNav: NavItem[] = [
+    { href: ROUTES.panel, label: "Panel de Control", icon: LayoutDashboard, module: "dashboard" },
+    { href: ROUTES.contactos, label: contactsNavLabel(industry), icon: Users, module: "contacts" },
+    { href: ROUTES.conversaciones, label: "Conversaciones", icon: MessagesSquare, module: "conversations" },
+    { href: ROUTES.agenda, label: "Agenda", icon: CalendarDays, module: "agenda", clinicOnly: true },
+    { href: ROUTES.servicios, label: "Servicios", icon: ClipboardList, module: "services", clinicOnly: true },
+    { href: ROUTES.segmentos, label: "Segmentos", icon: Layers, module: "campaigns" },
+    { href: ROUTES.plantillas, label: "Plantillas", icon: FileText, module: "campaigns" },
+    { href: ROUTES.campanas, label: "Campañas", icon: Megaphone, module: "campaigns" },
+    { href: ROUTES.agenteIa, label: "Agente IA", icon: Bot, module: "ai_agent" },
+    { href: ROUTES.configuracion, label: "Configuración", icon: Settings, module: "settings" },
   ];
+
+  const primaryNav = allNav.filter(
+    (item) =>
+      role !== null &&
+      canAccessModule(role, item.module) &&
+      (!item.clinicOnly || hasClinicAgenda(industry)),
+  );
+  const canCreateCampaign = role !== null && canAccessModule(role, "campaigns");
 
   return (
     <nav className="fixed top-0 left-0 z-50 flex h-full w-[260px] flex-col border-r border-white/10 bg-sidebar px-4 py-6 text-sm text-sidebar-foreground">
@@ -80,13 +81,15 @@ export function AppSidebar({ industry = "other" }: AppSidebarProps) {
         </div>
       </div>
 
-      <Link
-        href={ROUTES.campanasNueva}
-        className="mb-6 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border-t border-white/10 bg-primary-container text-sm font-semibold text-on-primary-container hover:bg-primary-container/90"
-      >
-        <Plus className="size-4" />
-        Nueva Campaña
-      </Link>
+      {canCreateCampaign ? (
+        <Link
+          href={ROUTES.campanasNueva}
+          className="mb-6 inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border-t border-white/10 bg-primary-container text-sm font-semibold text-on-primary-container hover:bg-primary-container/90"
+        >
+          <Plus className="size-4" />
+          Nueva Campaña
+        </Link>
+      ) : null}
 
       <div className="flex flex-1 flex-col gap-1 overflow-y-auto">
         {primaryNav.map((item) => {

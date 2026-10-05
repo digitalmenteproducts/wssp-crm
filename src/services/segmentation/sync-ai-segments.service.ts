@@ -1,6 +1,6 @@
 import type { Segment, SegmentRules } from "@/types/ai";
 import * as aiRepository from "@/repositories/ai.repository";
-import * as businessService from "@/services/business/business.service";
+import * as accessService from "@/services/business/access.service";
 import {
   buildSourceKey,
   humanizeSegmentDescription,
@@ -363,7 +363,7 @@ export async function syncAiSegmentsForCurrentBusiness(): Promise<
   | { ok: true; created: number; updated: number; skipped: number }
   | { ok: false; error: string }
 > {
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }

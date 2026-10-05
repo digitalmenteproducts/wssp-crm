@@ -11,7 +11,7 @@ import { formatAppointmentRange } from "@/lib/clinic/timezone-display";
 import * as appointmentService from "@/services/clinic/appointment.service";
 import * as clinicServicesService from "@/services/clinic/services.service";
 import * as contactsRepository from "@/repositories/contacts.repository";
-import * as businessService from "@/services/business/business.service";
+import * as accessService from "@/services/business/access.service";
 
 export type ClinicFormState = {
   error?: string;
@@ -172,11 +172,8 @@ export async function createClinicAppointmentAction(
   });
   if (!result.ok) return fromServiceFail(result);
 
-  const workspace = await businessService.getCurrentWorkspace();
-  const timezone =
-    workspace.ok && workspace.workspace
-      ? workspace.workspace.business.timezone
-      : "UTC";
+  const workspace = await accessService.getWorkspaceForModule("agenda");
+  const timezone = workspace.ok ? workspace.workspace.business.timezone : "UTC";
   const contactName = String(formData.get("contact_label") ?? "Paciente");
   const resourceName = String(formData.get("resource_label") ?? "Profesional");
   const summary = `${contactName} · ${resourceName} · ${formatAppointmentRange(
@@ -294,9 +291,9 @@ export async function listContactsForAgendaAction(): Promise<
   | { ok: true; contacts: Array<{ id: string; name: string | null; phone: string }> }
   | { ok: false; error: string }
 > {
-  const workspace = await businessService.getCurrentWorkspace();
-  if (!workspace.ok || !workspace.workspace) {
-    return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
+  const workspace = await accessService.getWorkspaceForModule("agenda");
+  if (!workspace.ok) {
+    return { ok: false, error: workspace.error };
   }
   const { data, error } = await contactsRepository.listContactsSimple(
     workspace.workspace.business.id,

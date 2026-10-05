@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 import { SettingsTabs } from "@/components/layout/settings-tabs";
 import { PageHeader } from "@/components/layout/page-header";
-import * as businessService from "@/services/business/business.service";
+import * as accessService from "@/services/business/access.service";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +22,7 @@ export default async function ConfiguracionPage({
   searchParams,
 }: ConfiguracionPageProps) {
   const params = await searchParams;
-  const result = await businessService.getCurrentWorkspace();
+  const result = await accessService.requireModulePage("settings");
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ??
     "http://localhost:3000";

@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { ConversationChat } from "@/components/conversations/conversation-chat";
 import { ConversationList } from "@/components/conversations/conversation-list";
 import { ROUTES } from "@/config/app";
+import { accessDeniedRoute } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import * as conversationsService from "@/services/conversations/conversations.service";
 
@@ -23,6 +25,10 @@ export default async function ConversacionesPage({
   const params = await searchParams;
   const requestedId = typeof params.c === "string" ? params.c : null;
   const result = await conversationsService.getConversationsPageData(requestedId);
+
+  if (!result.ok && result.forbidden) {
+    redirect(accessDeniedRoute());
+  }
 
   if (!result.ok) {
     return (

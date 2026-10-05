@@ -4,6 +4,7 @@ import {
   readActiveBusinessPreference,
 } from "@/lib/active-business-cookie";
 import { isSecretProvided, slugify } from "@/lib/business";
+import { canAccessModule, canManageBusiness } from "@/lib/permissions";
 import * as businessRepository from "@/repositories/business.repository";
 import * as businessSecretsRepository from "@/repositories/business-secrets.repository";
 import type { BusinessSecretsStatus } from "@/repositories/business-secrets.repository";
@@ -31,8 +32,9 @@ function formatZodIssues(error: { issues: { message: string }[] }): string {
   return error.issues.map((issue) => issue.message).join(" ");
 }
 
+/** Configuración, integraciones y secretos: módulo settings + owner/admin. */
 function canManageBusinessSecrets(role: string): boolean {
-  return role === "owner" || role === "admin";
+  return canAccessModule(role, "settings") && canManageBusiness(role);
 }
 
 function toPublicSettings(
@@ -239,7 +241,11 @@ export async function updateGeneral(
     return workspaceResult;
   }
 
-  const { business } = workspaceResult.workspace;
+  const { business, membership } = workspaceResult.workspace;
+  if (!canManageBusinessSecrets(membership.role)) {
+    return { ok: false, error: "Sin permiso para modificar la configuración." };
+  }
+
   const supportEmail =
     parsed.data.support_email && parsed.data.support_email.length > 0
       ? parsed.data.support_email
@@ -347,7 +353,10 @@ export async function updateAi(
     return workspaceResult;
   }
 
-  const { business } = workspaceResult.workspace;
+  const { business, membership } = workspaceResult.workspace;
+  if (!canManageBusinessSecrets(membership.role)) {
+    return { ok: false, error: "Sin permiso para modificar la configuración." };
+  }
 
   const { error } = await businessRepository.updateSettings(business.id, {
     ai_engine_enabled: parsed.data.ai_engine_enabled,

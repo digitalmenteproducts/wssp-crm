@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { ROUTES } from "@/config/app";
+import * as accessService from "@/services/business/access.service";
 import * as campaignsService from "@/services/campaigns/campaigns.service";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,7 @@ const STATUS_CLASS: Record<string, string> = {
 };
 
 export default async function CampanasPage() {
+  await accessService.requireModulePage("campaigns");
   const result = await campaignsService.listCampaignsForCurrentBusiness();
 
   const campaigns = result.ok ? result.campaigns : [];

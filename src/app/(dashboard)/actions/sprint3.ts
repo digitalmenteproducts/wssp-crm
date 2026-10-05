@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { ROUTES } from "@/config/app";
 import { runClassificationBatch } from "@/services/openai/classification-runner.service";
-import * as businessService from "@/services/business/business.service";
+import * as accessService from "@/services/business/access.service";
 import * as segmentsService from "@/services/segmentation/segments.service";
 import { syncAiSegmentsForBusiness } from "@/services/segmentation/sync-ai-segments.service";
 import type { CreateSegmentInput } from "@/schemas/ai";
@@ -18,9 +18,9 @@ export async function runClassificationAction(
   _prev: ClassifyFormState,
   _formData: FormData,
 ): Promise<ClassifyFormState> {
-  const workspace = await businessService.getCurrentWorkspace();
-  if (!workspace.ok || !workspace.workspace) {
-    return { error: workspace.ok ? "Sin empresa." : workspace.error };
+  const workspace = await accessService.getWorkspaceForModule("contacts");
+  if (!workspace.ok) {
+    return { error: workspace.error };
   }
 
   const businessId = workspace.workspace.business.id;
@@ -110,9 +110,9 @@ export async function syncAiSegmentsAction(
   _prev: SegmentFormState,
   _formData: FormData,
 ): Promise<SegmentFormState> {
-  const workspace = await businessService.getCurrentWorkspace();
-  if (!workspace.ok || !workspace.workspace) {
-    return { error: workspace.ok ? "Sin empresa." : workspace.error };
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
+  if (!workspace.ok) {
+    return { error: workspace.error };
   }
 
   const result = await syncAiSegmentsForBusiness(

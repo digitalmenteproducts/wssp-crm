@@ -9,8 +9,8 @@ import {
   contactsNavLabel,
   newContactLabel,
 } from "@/lib/industry";
+import * as accessService from "@/services/business/access.service";
 import * as boardService from "@/services/contacts/board.service";
-import * as businessService from "@/services/business/business.service";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +19,8 @@ export const metadata: Metadata = {
 };
 
 export default async function ContactosPage() {
-  const workspace = await businessService.getCurrentWorkspace();
-  const industry =
-    workspace.ok && workspace.workspace
-      ? workspace.workspace.business.industry
-      : "other";
+  const workspace = await accessService.requireModulePage("contacts");
+  const industry = workspace.ok ? workspace.workspace.business.industry : "other";
   const contactsLabel = contactsNavLabel(industry);
   const singular = contactSingularLabel(industry);
   const newLabel = newContactLabel(industry);

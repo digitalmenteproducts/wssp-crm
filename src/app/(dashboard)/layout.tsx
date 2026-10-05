@@ -14,14 +14,12 @@ export default async function DashboardLayout({
 }) {
   const { data } = await getCurrentUser();
   const workspace = await businessService.getCurrentWorkspace();
-  const industry =
-    workspace.ok && workspace.workspace
-      ? workspace.workspace.business.industry
-      : "other";
+  const current = workspace.ok ? workspace.workspace : undefined;
+  const industry = current?.business.industry ?? "other";
 
   return (
     <div className="flex min-h-full flex-1 bg-background text-on-surface">
-      <AppSidebar industry={industry} />
+      <AppSidebar industry={industry} role={current?.membership.role ?? null} />
       <div className="ml-[260px] flex min-h-screen flex-1 flex-col">
         <AppHeader userEmail={data.user?.email} />
         <main className="mt-16 flex-1 overflow-y-auto p-8">

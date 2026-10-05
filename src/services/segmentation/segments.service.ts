@@ -7,7 +7,7 @@ import type {
 import type { ContactBoardStatus } from "@/types";
 import * as aiRepository from "@/repositories/ai.repository";
 import { createSegmentSchema, type CreateSegmentInput } from "@/schemas/ai";
-import * as businessService from "@/services/business/business.service";
+import * as accessService from "@/services/business/access.service";
 import { summarizeRules } from "@/lib/segments/rules";
 
 export type AnalysisLite = {
@@ -183,7 +183,7 @@ export async function listSegmentsForCurrentBusiness(): Promise<
   | { ok: true; segments: Segment[] }
   | { ok: false; error: string }
 > {
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin workspace" : workspace.error };
   }
@@ -238,7 +238,7 @@ export async function createSegmentForCurrentBusiness(
     };
   }
 
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin workspace" : workspace.error };
   }
@@ -273,7 +273,7 @@ export async function evaluateSegmentMembership(
   | { ok: true; segment: Segment; matches: ContactSegmentMatch[] }
   | { ok: false; error: string }
 > {
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin workspace" : workspace.error };
   }

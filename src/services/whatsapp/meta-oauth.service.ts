@@ -12,6 +12,7 @@ import {
 import { getCurrentUser } from "@/repositories/auth.repository";
 import * as businessRepository from "@/repositories/business.repository";
 import * as businessSecretsRepository from "@/repositories/business-secrets.repository";
+import { canAccessModule, canManageBusiness } from "@/lib/permissions";
 import * as businessService from "@/services/business/business.service";
 
 const GRAPH_VERSION = "v21.0";
@@ -86,7 +87,7 @@ function setStateCookie(response: NextResponse, token: string) {
 }
 
 function canManageIntegrations(role: string): boolean {
-  return role === "owner" || role === "admin";
+  return canAccessModule(role, "settings") && canManageBusiness(role);
 }
 
 function resolveMetaAppId(): string | null {

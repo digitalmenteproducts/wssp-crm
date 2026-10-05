@@ -11,7 +11,10 @@ export const BUSINESS_INDUSTRIES = [
 
 export type BusinessIndustry = (typeof BUSINESS_INDUSTRIES)[number];
 
-export type BusinessRole = "owner" | "admin" | "member";
+export const BUSINESS_ROLES = ["owner", "admin", "professional", "member"] as const;
+
+/** `member` es legacy: se conserva por retrocompatibilidad y no se ofrece para nuevas altas. */
+export type BusinessRole = (typeof BUSINESS_ROLES)[number];
 
 export type Business = {
   id: string;

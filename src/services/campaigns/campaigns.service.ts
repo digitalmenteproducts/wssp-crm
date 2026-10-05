@@ -7,7 +7,8 @@ import * as businessSecretsRepository from "@/repositories/business-secrets.repo
 import * as campaignsRepository from "@/repositories/campaigns.repository";
 import * as whatsappRepository from "@/repositories/whatsapp.repository";
 import { mapTemplateRow } from "@/repositories/templates.repository";
-import * as businessService from "@/services/business/business.service";
+import { canManageBusiness } from "@/lib/permissions";
+import * as accessService from "@/services/business/access.service";
 import { evaluateSegmentMembership } from "@/services/segmentation/segments.service";
 import { buildCrmVariableValues } from "@/lib/templates/crm-variables";
 import { previewTemplateContent } from "@/lib/templates/preview";
@@ -80,7 +81,7 @@ export async function listCampaignsForCurrentBusiness(): Promise<
   | { ok: true; campaigns: Campaign[] }
   | { ok: false; error: string }
 > {
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
@@ -113,13 +114,12 @@ export async function launchCampaignForCurrentBusiness(
     return { ok: false, error: formatZodIssues(parsed.error) };
   }
 
-  const workspace = await businessService.getCurrentWorkspace();
+  const workspace = await accessService.getWorkspaceForModule("campaigns");
   if (!workspace.ok || !workspace.workspace) {
     return { ok: false, error: workspace.ok ? "Sin empresa." : workspace.error };
   }
 
-  const role = workspace.workspace.membership.role;
-  if (role !== "owner" && role !== "admin") {
+  if (!canManageBusiness(workspace.workspace.membership.role)) {
     return { ok: false, error: "Sin permiso para lanzar campañas." };
   }
 

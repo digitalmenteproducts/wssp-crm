@@ -1,11 +1,10 @@
-import { hasClinicAgenda } from "@/lib/industry";
 import {
   clinicErrorMessage,
   type ClinicErrorCode,
 } from "@/lib/clinic/errors";
 import * as clinicRepository from "@/repositories/clinic.repository";
-import * as businessService from "@/services/business/business.service";
 import type { ClinicActionResult } from "@/services/clinic/appointment.service";
+import { requireClinicWorkspace } from "@/services/clinic/clinic-access";
 import {
   upsertClinicServiceAvailabilitySchema,
   upsertClinicServiceSchema,
@@ -36,50 +35,8 @@ function fail(
   };
 }
 
-async function requireClinicAdminWorkspace() {
-  const workspace = await businessService.getCurrentWorkspace();
-  if (!workspace.ok || !workspace.workspace) {
-    return {
-      ok: false as const,
-      error: workspace.ok ? "Sin empresa." : workspace.error,
-      code: "GENERIC" as const,
-    };
-  }
-  if (!hasClinicAgenda(workspace.workspace.business.industry)) {
-    return {
-      ok: false as const,
-      error: "La agenda clínica no está disponible para este negocio.",
-      code: "GENERIC" as const,
-    };
-  }
-  const role = workspace.workspace.membership.role;
-  if (role !== "owner" && role !== "admin") {
-    return {
-      ok: false as const,
-      error: "Sin permiso de administración.",
-      code: "GENERIC" as const,
-    };
-  }
-  return { ok: true as const, workspace: workspace.workspace };
-}
-
-async function requireClinicMemberWorkspace() {
-  const workspace = await businessService.getCurrentWorkspace();
-  if (!workspace.ok || !workspace.workspace) {
-    return {
-      ok: false as const,
-      error: workspace.ok ? "Sin empresa." : workspace.error,
-      code: "GENERIC" as const,
-    };
-  }
-  if (!hasClinicAgenda(workspace.workspace.business.industry)) {
-    return {
-      ok: false as const,
-      error: "La agenda clínica no está disponible para este negocio.",
-      code: "GENERIC" as const,
-    };
-  }
-  return { ok: true as const, workspace: workspace.workspace };
+function requireClinicAdminWorkspace() {
+  return requireClinicWorkspace("services", { manage: true });
 }
 
 function joinServiceListItems(input: {
@@ -113,7 +70,7 @@ export async function listServicesPageData(): Promise<
     availabilityByServiceId: Record<string, ClinicServiceAvailability[]>;
   }>
 > {
-  const gate = await requireClinicMemberWorkspace();
+  const gate = await requireClinicWorkspace("services");
   if (!gate.ok) return gate;
 
   const businessId = gate.workspace.business.id;
