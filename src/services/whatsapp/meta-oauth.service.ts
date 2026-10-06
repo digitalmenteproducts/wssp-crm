@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { ROUTES } from "@/config/app";
+import { appBaseUrl } from "@/lib/app-url";
 import { getOptionalServerEnv, getPublicEnv } from "@/lib/env";
 import {
   META_OAUTH_STATE_COOKIE,
@@ -16,38 +17,6 @@ import { canAccessModule, canManageBusiness } from "@/lib/permissions";
 import * as businessService from "@/services/business/business.service";
 
 const GRAPH_VERSION = "v21.0";
-
-/**
- * Dominio público de la app. Nunca usar el dashboard de Vercel
- * (`vercel.com/<team>/<project>`).
- */
-function normalizePublicAppUrl(value: string | null | undefined): string | null {
-  if (!value?.trim()) return null;
-  try {
-    const url = new URL(value.trim());
-    if (url.protocol !== "http:" && url.protocol !== "https:") {
-      return null;
-    }
-    // Dashboard / consola de Vercel — no es el origen de la app.
-    if (url.hostname === "vercel.com") {
-      return null;
-    }
-    return url.origin.replace(/\/$/, "");
-  } catch {
-    return null;
-  }
-}
-
-function appBaseUrl(): string {
-  // Preferir APP_URL server-side (runtime) para no depender solo del inline de build.
-  const fromServer = normalizePublicAppUrl(process.env.APP_URL);
-  if (fromServer) return fromServer;
-
-  const fromPublic = normalizePublicAppUrl(process.env.NEXT_PUBLIC_APP_URL);
-  if (fromPublic) return fromPublic;
-
-  return "http://localhost:3000";
-}
 
 export function metaOAuthCallbackUrl(): string {
   return `${appBaseUrl()}/api/oauth/meta/callback`;

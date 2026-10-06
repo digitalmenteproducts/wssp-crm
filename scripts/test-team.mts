@@ -91,8 +91,8 @@ assert("fecha: zona inválida no rompe", formatJoinedDate("2026-09-15T15:00:00Z"
   assert("servicio: usa resolveCurrentWorkspace", svc.includes("businessService.resolveCurrentWorkspace()"));
   assert("servicio: comprueba rol antes de la RPC", svc.indexOf("canManageTeam(") < svc.indexOf("listBusinessMembers("));
   assert(
-    "botón Invitar deshabilitado y sin acción",
-    /<Button disabled/.test(page) && !/onClick|formAction|action=/.test(page) && page.includes("Disponible próximamente"),
+    "botón Crear usuario habilitado (modal)",
+    page.includes("<CreateUserDialog />") && !page.includes("Disponible próximamente"),
   );
   const repo = fs.readFileSync(path.join("src", "repositories", "business.repository.ts"), "utf8");
   const rpcBlock = repo.slice(repo.indexOf("export async function listBusinessMembers"), repo.indexOf("export async function findBusinessById"));

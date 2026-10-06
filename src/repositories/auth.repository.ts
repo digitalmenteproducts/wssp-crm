@@ -41,6 +41,13 @@ export async function getCurrentUser() {
   return supabase.auth.getUser();
 }
 
+/** Actualiza la contraseña del usuario de la sesión (Supabase Auth). */
+export async function updatePassword(password: string) {
+  const supabase = await createClient();
+
+  return supabase.auth.updateUser({ password });
+}
+
 export async function signOut() {
   const supabase = await createClient();
 

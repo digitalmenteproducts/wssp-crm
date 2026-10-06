@@ -1,4 +1,5 @@
 import {
+  changePasswordSchema,
   loginSchema,
   recoverSchema,
   registerSchema,
@@ -100,6 +101,44 @@ export async function requestPasswordReset(
     message:
       "Si el correo existe, te enviamos instrucciones para restablecer la contraseña.",
   };
+}
+
+export type ChangePasswordDeps = {
+  getCurrentUser: typeof authRepository.getCurrentUser;
+  updatePassword: typeof authRepository.updatePassword;
+};
+
+/**
+ * El usuario autenticado cambia SU contraseña con su propia sesión (`auth.updateUser`, sin service role).
+ * No recibe user_id: no hay forma de apuntar a otra cuenta. Independiente del rol en el negocio.
+ */
+export async function changePassword(
+  input: unknown,
+  deps: ChangePasswordDeps = {
+    getCurrentUser: authRepository.getCurrentUser,
+    updatePassword: authRepository.updatePassword,
+  },
+): Promise<AuthActionResult> {
+  const parsed = changePasswordSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: formatZodIssues(parsed.error) };
+  }
+
+  const { data } = await deps.getCurrentUser();
+  if (!data.user) {
+    return { ok: false, error: "Debes iniciar sesión." };
+  }
+
+  const { error } = await deps.updatePassword(parsed.data.password);
+  if (error) {
+    return {
+      ok: false,
+      error: /different from the old/i.test(error.message)
+        ? "La nueva contraseña debe ser distinta de la actual."
+        : "No se pudo cambiar la contraseña.",
+    };
+  }
+  return { ok: true, message: "Contraseña actualizada correctamente." };
 }
 
 export async function logout(): Promise<AuthActionResult> {

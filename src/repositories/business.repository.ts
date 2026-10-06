@@ -43,6 +43,29 @@ export async function listBusinessMembers(
   return { data: (data ?? []) as BusinessMember[], error: null, forbidden: false };
 }
 
+export type AddBusinessMemberError = "forbidden" | "invalid_role" | "already_member" | "unknown";
+
+/** RPC security definer: exige owner/admin de businessId y rol admin/professional. */
+export async function addBusinessMember(input: {
+  businessId: string;
+  userId: string;
+  role: string;
+}): Promise<{ error: AddBusinessMemberError | null }> {
+  const supabase = await createClient();
+
+  const { error } = await supabase.rpc("add_business_member", {
+    p_business_id: input.businessId,
+    p_user_id: input.userId,
+    p_role: input.role,
+  });
+
+  if (!error) return { error: null };
+  if (error.code === "42501") return { error: "forbidden" };
+  if (error.message.includes("invalid_role")) return { error: "invalid_role" };
+  if (error.message.includes("already_member") || error.code === "23505") return { error: "already_member" };
+  return { error: "unknown" };
+}
+
 export async function findBusinessById(businessId: string) {
   const supabase = await createClient();
 

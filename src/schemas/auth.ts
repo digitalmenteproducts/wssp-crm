@@ -24,6 +24,21 @@ export const recoverSchema = z.object({
   email: z.email("Introduce un correo electrónico válido."),
 });
 
+export const changePasswordSchema = z
+  .object({
+    password: z
+      .string()
+      .min(1, "La contraseña es obligatoria.")
+      .min(8, "La contraseña debe tener al menos 8 caracteres.")
+      .max(72, "La contraseña no puede superar 72 caracteres.")
+      .refine((v) => /[A-Za-z]/.test(v) && /\d/.test(v), "La contraseña debe incluir letras y números."),
+    confirm: z.string(),
+  })
+  .refine((v) => v.password === v.confirm, {
+    message: "Las contraseñas no coinciden.",
+    path: ["confirm"],
+  });
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type RecoverInput = z.infer<typeof recoverSchema>;

@@ -1,6 +1,6 @@
 import { Bell, Search } from "lucide-react";
 
-import { logoutAction } from "@/app/(auth)/actions";
+import { UserMenu } from "@/components/layout/user-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { APP_NAME } from "@/config/app";
@@ -52,16 +52,7 @@ export function AppHeader({ userEmail }: AppHeaderProps) {
           <Bell className="size-5" />
         </button>
 
-        <form action={logoutAction}>
-          <button
-            type="submit"
-            title={userEmail ? `Cerrar sesión (${userEmail})` : "Cerrar sesión"}
-            className="flex size-8 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground transition-opacity hover:opacity-90"
-            aria-label="Cerrar sesión"
-          >
-            {initials}
-          </button>
-        </form>
+        <UserMenu userEmail={userEmail} initials={initials} />
       </div>
     </header>
   );

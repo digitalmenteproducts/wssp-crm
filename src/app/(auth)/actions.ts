@@ -81,6 +81,19 @@ export async function recoverAction(
   return { message: result.message };
 }
 
+/** Cuenta del usuario de la sesión: disponible para cualquier rol. */
+export async function changePasswordAction(
+  _prevState: AuthFormState,
+  formData: FormData,
+): Promise<AuthFormState> {
+  const result = await authService.changePassword({
+    password: String(formData.get("password") ?? ""),
+    confirm: String(formData.get("confirm") ?? ""),
+  });
+
+  return result.ok ? { message: result.message } : { error: result.error };
+}
+
 export async function logoutAction(): Promise<void> {
   await authService.logout();
   await clearActiveBusiness();

@@ -18,6 +18,24 @@ export function canManageTeam(role: string): boolean {
   return canAccessModule(role, "team");
 }
 
+/** Roles que owner/admin pueden asignar al crear usuarios (owner y member quedan fuera). */
+export const CREATABLE_ROLES = ["admin", "professional"] as const satisfies readonly BusinessRole[];
+export type CreatableRole = (typeof CREATABLE_ROLES)[number];
+
+/** Texto que el creador copia y comparte manualmente con el nuevo usuario. */
+export function formatCredentialsForCopy(input: {
+  loginUrl: string;
+  email: string;
+  temporaryPassword: string;
+}): string {
+  return [
+    "Acceso al sistema",
+    `URL: ${input.loginUrl}`,
+    `Email: ${input.email}`,
+    `Contraseña temporal: ${input.temporaryPassword}`,
+  ].join("\n");
+}
+
 const MONTHS_ES = [
   "ene",
   "feb",

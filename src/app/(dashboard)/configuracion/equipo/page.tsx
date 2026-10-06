@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { UserPlus } from "lucide-react";
 
 import { PageHeader } from "@/components/layout/page-header";
 import { SettingsSectionNav } from "@/components/layout/settings-section-nav";
+import { CreateUserDialog } from "@/components/team/create-user-dialog";
 import { TeamMembersTable } from "@/components/team/team-members-table";
-import { Button } from "@/components/ui/button";
 import { ROUTES } from "@/config/app";
 import * as teamService from "@/services/business/team.service";
 
@@ -27,15 +26,7 @@ export default async function EquipoPage() {
       <PageHeader
         title="Equipo"
         description="Gestiona las personas que tienen acceso a este negocio."
-        actions={
-          <div className="flex flex-col items-end gap-1">
-            <Button disabled aria-disabled title="Disponible próximamente">
-              <UserPlus />
-              Invitar usuario
-            </Button>
-            <span className="text-xs text-secondary">Disponible próximamente</span>
-          </div>
-        }
+        actions={team.ok ? <CreateUserDialog /> : null}
       />
 
       <SettingsSectionNav active="equipo" />
